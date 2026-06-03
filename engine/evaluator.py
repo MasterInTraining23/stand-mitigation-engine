@@ -23,7 +23,7 @@ def evaluate_property(observations: dict, db: Session, as_of: Optional[datetime]
             continue
 
         definition = json.loads(rule.definition)
-        passes = evaluator_class().evaluate(definition, observations)
+        passes, details = evaluator_class().evaluate(definition, observations)
 
         if not passes:
             vulnerabilities.append({
@@ -32,6 +32,7 @@ def evaluate_property(observations: dict, db: Session, as_of: Optional[datetime]
                 "rule_name": rule.name,
                 "category": rule.category,
                 "written_rule": rule.written_rule,
+                "violation_details": details,
                 "full_mitigations": [
                     {"name": m.name, "description": m.description}
                     for m in rule.mitigations if m.type == "full"

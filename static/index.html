@@ -101,6 +101,28 @@
     .mit-section.none .mit-list li { background: var(--red-bg); color: var(--red); }
     .mit-desc { font-size: 11px; opacity: 0.75; margin-top: 2px; }
 
+    /* Mitigation Simulator */
+    .simulator { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 12px; }
+    .simulator h4 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary); margin-bottom: 10px; }
+    .sim-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 12px; }
+    .sim-table th { text-align: left; padding: 5px 8px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+    .sim-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    .sim-table tr:last-child td { border-bottom: none; }
+    .sim-pass td { background: var(--green-bg); }
+    .sim-fail td { background: var(--red-bg); }
+    .sim-status { font-weight: 700; }
+    .sim-status.pass { color: var(--green); }
+    .sim-status.fail { color: var(--red); }
+    .mit-checkbox-list { display: flex; flex-direction: column; gap: 6px; }
+    .mit-checkbox-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--yellow-bg); border-radius: 5px; cursor: pointer; }
+    .mit-checkbox-item input[type="checkbox"] { margin-top: 2px; cursor: pointer; accent-color: var(--primary); width: 14px; height: 14px; flex-shrink: 0; }
+    .mit-checkbox-item label { cursor: pointer; font-size: 13px; color: var(--yellow); }
+    .mit-checkbox-item label strong { display: block; }
+    .mit-checkbox-item label span { font-size: 11px; opacity: 0.8; }
+    .sim-resolved { padding: 8px 12px; border-radius: 5px; font-size: 13px; font-weight: 600; margin-top: 10px; text-align: center; }
+    .sim-resolved.pass { background: var(--green-bg); color: var(--green); }
+    .sim-resolved.fail { background: var(--red-bg); color: var(--red); }
+
     /* Applied Science */
     .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .toolbar h2 { font-size: 15px; font-weight: 600; }
@@ -307,6 +329,9 @@
 let vegetationItems = [];
 let allRules = [];
 let testingRuleId = null;
+let baseObservations = {};   // original observations without applied mitigations
+let appliedMitigations = new Set();  // slugs of currently selected bridge mitigations
+let lastAsOf = null;
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
 function switchTab(name, btn) {
@@ -344,12 +369,19 @@ function renderVegetation() {
 
 // ─── EVALUATION ──────────────────────────────────────────────────────────────
 async function runEvaluation() {
-  const obs = buildObservations();
-  const asOf = document.getElementById('as_of').value;
-  const body = { observations: obs };
-  if (asOf) body.as_of = new Date(asOf).toISOString();
+  baseObservations = buildObservations();
+  appliedMitigations = new Set();
+  lastAsOf = document.getElementById('as_of').value;
+  await evaluateWithMitigations();
+}
 
-  document.getElementById('results').innerHTML = '<div class="loading">Evaluating…</div>';
+async function evaluateWithMitigations() {
+  const obs = { ...baseObservations };
+  if (appliedMitigations.size > 0) obs.applied_mitigations = [...appliedMitigations];
+
+  const body = { observations: obs };
+  if (lastAsOf) body.as_of = new Date(lastAsOf).toISOString();
+
   try {
     const res = await fetch('/evaluate', {
       method: 'POST',
@@ -361,6 +393,15 @@ async function runEvaluation() {
   } catch (e) {
     document.getElementById('results').innerHTML = `<div class="error-msg">Request failed: ${e.message}</div>`;
   }
+}
+
+async function toggleMitigation(slug) {
+  if (appliedMitigations.has(slug)) {
+    appliedMitigations.delete(slug);
+  } else {
+    appliedMitigations.add(slug);
+  }
+  await evaluateWithMitigations();
 }
 
 function buildObservations() {
@@ -401,6 +442,8 @@ function renderResults(data) {
     vulnerabilities.forEach(v => {
       const hasFullMit = v.full_mitigations.length > 0;
       const hasBridge = v.bridge_mitigations.length > 0;
+      const hasSimulator = v.violation_details && v.violation_details.length > 0 && hasBridge;
+
       html += `
         <div class="vuln-card">
           <div class="vuln-header">
@@ -418,7 +461,7 @@ function renderResults(data) {
                   ${v.full_mitigations.map(m => `<li><strong>${m.name}</strong>${m.description ? `<div class="mit-desc">${m.description}</div>` : ''}</li>`).join('')}
                 </ul>
               </div>` : ''}
-            ${hasBridge ? `
+            ${hasSimulator ? renderSimulator(v) : hasBridge ? `
               <div class="mit-section bridge">
                 <h4>Bridge Mitigations (partial)</h4>
                 <ul class="mit-list">
@@ -436,6 +479,52 @@ function renderResults(data) {
     });
   }
   document.getElementById('results').innerHTML = html;
+}
+
+function renderSimulator(v) {
+  const allPass = v.violation_details.every(d => d.passes);
+  const rows = v.violation_details.map(d => `
+    <tr class="${d.passes ? 'sim-pass' : 'sim-fail'}">
+      <td>${d.vegetation_type}</td>
+      <td>${d.actual_distance} ft</td>
+      <td>${d.required_distance} ft</td>
+      <td class="sim-status ${d.passes ? 'pass' : 'fail'}">${d.passes ? '✓ OK' : '✗ Fails'}</td>
+    </tr>
+  `).join('');
+
+  const checkboxes = v.bridge_mitigations
+    .filter(m => m.modifier_params && m.modifier_params.slug)
+    .map(m => {
+      const slug = m.modifier_params.slug;
+      const checked = appliedMitigations.has(slug) ? 'checked' : '';
+      return `
+        <div class="mit-checkbox-item">
+          <input type="checkbox" id="mit-${slug}" ${checked} onchange="toggleMitigation('${slug}')" />
+          <label for="mit-${slug}">
+            <strong>${m.name}</strong>
+            <span>${m.description || ''}</span>
+          </label>
+        </div>
+      `;
+    }).join('');
+
+  const resolution = allPass
+    ? `<div class="sim-resolved pass">✓ Vulnerability resolved with selected mitigations</div>`
+    : appliedMitigations.size > 0
+      ? `<div class="sim-resolved fail">✗ Vulnerability persists — additional or full mitigations needed</div>`
+      : '';
+
+  return `
+    <div class="simulator">
+      <h4>Mitigation Simulator</h4>
+      <table class="sim-table">
+        <thead><tr><th>Vegetation</th><th>Actual</th><th>Required</th><th>Status</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="mit-checkbox-list">${checkboxes}</div>
+      ${resolution}
+    </div>
+  `;
 }
 
 function loadExample() {

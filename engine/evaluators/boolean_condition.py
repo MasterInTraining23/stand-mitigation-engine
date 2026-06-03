@@ -2,8 +2,8 @@ from .base import BaseEvaluator
 
 
 class BooleanConditionEvaluator(BaseEvaluator):
-    def evaluate(self, definition: dict, observations: dict) -> bool:
-        return self._eval_node(definition["condition"], observations)
+    def evaluate(self, definition: dict, observations: dict) -> tuple[bool, None]:
+        return (self._eval_node(definition["condition"], observations), None)
 
     def _eval_node(self, node: dict, observations: dict) -> bool:
         if "and" in node:

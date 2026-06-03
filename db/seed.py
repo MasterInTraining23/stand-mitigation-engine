@@ -95,6 +95,11 @@ SEED_RULES = [
                     "Grass": {"op": "divide",   "value": 3},
                 },
             },
+            "mitigation_modifiers": {
+                "apply_window_film":            {"factor": 0.8},
+                "apply_flame_retardant_shrubs": {"factor": 0.75, "target_type": "Shrub"},
+                "prune_trees":                  {"factor": 0.5,  "target_type": "Tree"},
+            },
         },
         "mitigations": [
             {
@@ -111,19 +116,19 @@ SEED_RULES = [
                 "type": "bridge",
                 "name": "Apply Window Film",
                 "description": "Apply fire-resistant film to windows, decreasing minimum safe distance by 20%.",
-                "modifier_params": {"factor": 0.8},
+                "modifier_params": {"slug": "apply_window_film", "factor": 0.8},
             },
             {
                 "type": "bridge",
                 "name": "Apply Flame Retardant to Shrubs",
                 "description": "Treat shrubs with flame retardant, decreasing minimum safe distance by 25%.",
-                "modifier_params": {"factor": 0.75},
+                "modifier_params": {"slug": "apply_flame_retardant_shrubs", "factor": 0.75, "target_type": "Shrub"},
             },
             {
                 "type": "bridge",
                 "name": "Prune Trees to Safe Height",
                 "description": "Prune trees to a safe height, decreasing minimum safe distance by 50%.",
-                "modifier_params": {"factor": 0.5},
+                "modifier_params": {"slug": "prune_trees", "factor": 0.5, "target_type": "Tree"},
             },
         ],
     },

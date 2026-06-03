@@ -158,7 +158,7 @@ def test_rule(rule_id: int, request: TestRuleRequest, db: Session = Depends(get_
         raise HTTPException(status_code=422, detail=f"Unknown evaluator type: {rule.type}")
 
     definition = json.loads(rule.definition)
-    passes = evaluator_class().evaluate(definition, request.observations)
+    passes, _ = evaluator_class().evaluate(definition, request.observations)
 
     return {
         "rule_id": rule.id,
