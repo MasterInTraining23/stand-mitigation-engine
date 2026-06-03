@@ -124,6 +124,7 @@ def transition_rule(rule_id: int, payload: TransitionRequest, db: Session = Depe
                 note=f"Superseded by rule version {rule.id}",
             ))
         rule.activated_at = now
+        rule.deactivated_at = None  # clear any prior deactivation (reactivation case)
 
     if payload.to_status == "deactivated":
         rule.deactivated_at = now

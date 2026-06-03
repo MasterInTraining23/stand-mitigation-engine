@@ -152,4 +152,22 @@ class TestAdminRules:
             "to_status": "activated", "author_id": "u", "author_name": "User"
         })
         assert res.status_code == 200
-        assert res.json()["status"] == "activated"
+        data = res.json()
+        assert data["status"] == "activated"
+        assert data["deactivated_at"] is None  # must be cleared on reactivation
+
+    def test_reactivated_rule_evaluates(self, client):
+        rule_id = create_and_activate_rule(client, ROOF_RULE)
+        client.post(f"/admin/rules/{rule_id}/transition", json={
+            "to_status": "deactivated", "author_id": "u", "author_name": "User"
+        })
+        # deactivated — should not evaluate
+        res = client.post("/evaluate", json={"observations": {"roof_type": "Class C"}})
+        assert res.json()["vulnerabilities"] == []
+
+        client.post(f"/admin/rules/{rule_id}/transition", json={
+            "to_status": "activated", "author_id": "u", "author_name": "User"
+        })
+        # reactivated — should evaluate again
+        res = client.post("/evaluate", json={"observations": {"roof_type": "Class C"}})
+        assert len(res.json()["vulnerabilities"]) == 1

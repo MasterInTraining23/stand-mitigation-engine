@@ -307,6 +307,29 @@
   </div>
 </div>
 
+<!-- ─── TRANSITION MODAL ─── -->
+<div class="modal-overlay" id="transition-modal">
+  <div class="modal" style="width:400px">
+    <h2 id="transition-modal-title">Transition Rule</h2>
+    <input type="hidden" id="transition-rule-id" />
+    <input type="hidden" id="transition-to-status" />
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="transition-author" placeholder="e.g. Jane Smith" />
+      </div>
+      <div class="form-group">
+        <label>Change Note (optional)</label>
+        <input type="text" id="transition-note" placeholder="Reason for this transition" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeTransitionModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmTransition()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── TEST RULE MODAL ─── -->
 <div class="modal-overlay" id="test-modal">
   <div class="modal">
@@ -604,21 +627,49 @@ function getTransitionButtons(r) {
   ).join('');
 }
 
-async function doTransition(ruleId, toStatus) {
-  const author = prompt('Your name (for audit log):');
-  if (!author) return;
-  const note = prompt('Change note (optional):') || '';
+function doTransition(ruleId, toStatus) {
+  const rule = allRules.find(r => r.id === ruleId);
+  document.getElementById('transition-rule-id').value = ruleId;
+  document.getElementById('transition-to-status').value = toStatus;
+  document.getElementById('transition-modal-title').textContent =
+    `${toStatus.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}: ${rule ? rule.name : ''}`;
+  document.getElementById('transition-author').value = '';
+  document.getElementById('transition-note').value = '';
+  document.getElementById('transition-modal').classList.add('open');
+}
+
+function closeTransitionModal() {
+  document.getElementById('transition-modal').classList.remove('open');
+}
+
+async function confirmTransition() {
+  const ruleId = document.getElementById('transition-rule-id').value;
+  const toStatus = document.getElementById('transition-to-status').value;
+  const author = document.getElementById('transition-author').value.trim();
+  const note = document.getElementById('transition-note').value.trim();
+
+  if (!author) {
+    document.getElementById('transition-author').focus();
+    return;
+  }
+
   try {
     const res = await fetch(`/admin/rules/${ruleId}/transition`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_status: toStatus, author_id: author.toLowerCase().replace(/\s+/g,'_'), author_name: author, note }),
+      body: JSON.stringify({
+        to_status: toStatus,
+        author_id: author.toLowerCase().replace(/\s+/g, '_'),
+        author_name: author,
+        note: note || null,
+      }),
     });
     if (!res.ok) {
       const err = await res.json();
       alert(err.detail || 'Transition failed');
       return;
     }
+    closeTransitionModal();
     await loadRules();
     document.getElementById('rule-detail').innerHTML = '';
   } catch (e) {
