@@ -4,16 +4,43 @@ A proof-of-concept mitigation rules engine for property insurance underwriting.
 Evaluates a property's observations against a versioned database of underwriting rules,
 identifies vulnerabilities, and recommends mitigations.
 
-## Quickstart
+## Reviewer Setup
+
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (included with Docker Desktop).
 
 ```bash
+git clone https://github.com/MasterInTraining23/stand-mitigation-engine.git
+cd stand-mitigation-engine
 docker-compose up --build
 ```
 
-Open [http://localhost:8000](http://localhost:8000) — the app is running.
-API docs available at [http://localhost:8000/docs](http://localhost:8000/docs).
+- App: [http://localhost:8000](http://localhost:8000)
+- API docs (Swagger): [http://localhost:8000/docs](http://localhost:8000/docs)
 
-The database is seeded on first start with the four example rules from the spec.
+The database is seeded automatically on first start with the four example rules from the spec.
+To reset the database, stop the container and delete the `data/` directory, then restart.
+
+### Try it immediately
+
+1. Open [http://localhost:8000](http://localhost:8000)
+2. Click **Load Example** to pre-fill a vulnerable property
+3. Click **Evaluate Property** — you'll see vulnerabilities across attic, roof, and windows categories
+4. Switch to the **Applied Science** tab to explore rules, transition their lifecycle, or test a draft rule
+
+---
+
+## Local Development (without Docker)
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+Run tests:
+```bash
+pytest tests/ -v
+```
 
 ---
 
