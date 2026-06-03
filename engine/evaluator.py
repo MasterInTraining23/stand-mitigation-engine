@@ -13,8 +13,13 @@ EVALUATORS = {
 }
 
 
-def evaluate_property(observations: dict, db: Session, as_of: Optional[datetime] = None):
-    rules = rule_cache.get_active_rules(db, as_of=as_of)
+def evaluate_property(
+    observations: dict,
+    db: Session,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+):
+    rules = rule_cache.get_active_rules(db, from_date=from_date, to_date=to_date)
     vulnerabilities = []
 
     for rule in rules:
@@ -57,7 +62,9 @@ def evaluate_property(observations: dict, db: Session, as_of: Optional[datetime]
     ]
 
     return {
-        "as_of": (as_of or datetime.now(timezone.utc).replace(tzinfo=None)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "from_date": from_date.strftime("%Y-%m-%dT%H:%M:%SZ") if from_date else None,
+        "to_date": to_date.strftime("%Y-%m-%dT%H:%M:%SZ") if to_date else None,
+        "evaluated_at": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "vulnerabilities": vulnerabilities,
         "summary": {
             "total_vulnerabilities": len(vulnerabilities),

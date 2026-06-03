@@ -63,14 +63,33 @@ class TestEvaluationEndpoint:
         assert res.status_code == 200
         assert res.json()["vulnerabilities"] == []
 
-    def test_as_of_before_activation_returns_empty(self, client):
+    def test_to_date_before_activation_returns_empty(self, client):
         create_and_activate_rule(client, ROOF_RULE)
         res = client.post("/evaluate", json={
             "observations": {"roof_type": "Class B", "wildfire_risk_category": "B"},
-            "as_of": "2000-01-01T00:00:00Z",
+            "from_date": "2000-01-01T00:00:00Z",
+            "to_date":   "2000-06-01T00:00:00Z",
         })
         assert res.status_code == 200
         assert res.json()["vulnerabilities"] == []
+
+    def test_range_spanning_activation_includes_rule(self, client):
+        create_and_activate_rule(client, ROOF_RULE)
+        res = client.post("/evaluate", json={
+            "observations": {"roof_type": "Class B", "wildfire_risk_category": "B"},
+            "from_date": "2000-01-01T00:00:00Z",
+            "to_date":   "2099-01-01T00:00:00Z",
+        })
+        assert res.status_code == 200
+        assert len(res.json()["vulnerabilities"]) == 1
+
+    def test_invalid_range_returns_422(self, client):
+        res = client.post("/evaluate", json={
+            "observations": {},
+            "from_date": "2026-06-01T00:00:00Z",
+            "to_date":   "2025-01-01T00:00:00Z",
+        })
+        assert res.status_code == 422
 
 
 class TestAdminRules:

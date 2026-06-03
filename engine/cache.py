@@ -22,10 +22,14 @@ class RuleCache:
                     cls._instance._cache = None
         return cls._instance
 
-    def get_active_rules(self, db, as_of=None):
-        from db.queries import query_active_rules, query_active_rules_at
-        if as_of is not None:
-            return query_active_rules_at(db, as_of)
+    def get_active_rules(self, db, from_date=None, to_date=None):
+        from db.queries import query_active_rules, query_active_rules_in_range, query_active_rules_at
+        if from_date and to_date:
+            return query_active_rules_in_range(db, from_date, to_date)
+        if from_date:
+            return query_active_rules_at(db, from_date)
+        if to_date:
+            return query_active_rules_at(db, to_date)
         if self._cache is None:
             self._cache = query_active_rules(db)
         return self._cache

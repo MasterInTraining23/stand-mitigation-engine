@@ -10,4 +10,9 @@ router = APIRouter()
 
 @router.post("/evaluate")
 def evaluate(request: EvaluateRequest, db: Session = Depends(get_db)):
-    return evaluate_property(request.observations, db, as_of=request.as_of)
+    return evaluate_property(
+        request.observations,
+        db,
+        from_date=request.from_date,
+        to_date=request.to_date,
+    )
