@@ -594,10 +594,10 @@ function renderRulesTable() {
 
 function getTransitionButtons(r) {
   const transitions = {
-    draft: [['Send for Review','under_review','btn-outline'],['Deactivate','deactivated','btn-danger']],
+    draft:        [['Send for Review','under_review','btn-outline'],['Deactivate','deactivated','btn-danger']],
     under_review: [['Activate','activated','btn-green'],['Back to Draft','draft','btn-outline']],
-    activated: [['Deactivate','deactivated','btn-danger']],
-    deactivated: [],
+    activated:    [['Deactivate','deactivated','btn-danger']],
+    deactivated:  [['Reactivate','activated','btn-green']],
   };
   return (transitions[r.status] || []).map(([label, to, cls]) =>
     `<button class="btn ${cls} btn-sm" onclick="doTransition(${r.id},'${to}')">${label}</button>`

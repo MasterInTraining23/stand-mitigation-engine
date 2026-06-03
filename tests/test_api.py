@@ -142,3 +142,14 @@ class TestAdminRules:
         create_and_activate_rule(client, {**ROOF_RULE, "change_note": "v2"})
         history = client.get(f"/admin/rules/slug/{ROOF_RULE['slug']}/history").json()
         assert len(history) == 2
+
+    def test_reactivate_deactivated_rule(self, client):
+        rule_id = create_and_activate_rule(client, ROOF_RULE)
+        client.post(f"/admin/rules/{rule_id}/transition", json={
+            "to_status": "deactivated", "author_id": "u", "author_name": "User"
+        })
+        res = client.post(f"/admin/rules/{rule_id}/transition", json={
+            "to_status": "activated", "author_id": "u", "author_name": "User"
+        })
+        assert res.status_code == 200
+        assert res.json()["status"] == "activated"

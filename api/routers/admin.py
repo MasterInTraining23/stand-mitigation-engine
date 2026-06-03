@@ -15,7 +15,7 @@ VALID_TRANSITIONS = {
     "draft":        ["under_review", "deactivated"],
     "under_review": ["activated", "draft"],
     "activated":    ["deactivated"],
-    "deactivated":  [],
+    "deactivated":  ["activated"],
 }
 
 
