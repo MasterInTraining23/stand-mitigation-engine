@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stand Mitigation Rules Engine</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --border: #e0e0e0;
+      --text: #1a1a1a;
+      --muted: #6b6b6b;
+      --primary: #1a56db;
+      --primary-hover: #1345b7;
+      --green: #057a55;
+      --green-bg: #f0fdf4;
+      --yellow: #92400e;
+      --yellow-bg: #fffbeb;
+      --red: #9b1c1c;
+      --red-bg: #fef2f2;
+      --blue-bg: #eff6ff;
+      --badge-draft: #6b7280;
+      --badge-review: #1a56db;
+      --badge-active: #057a55;
+      --badge-deactivated: #9b1c1c;
+    }
+
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 32px; }
+    header h1 { font-size: 16px; font-weight: 600; padding: 16px 0; white-space: nowrap; }
+    nav { display: flex; gap: 0; }
+    nav button { background: none; border: none; border-bottom: 3px solid transparent; padding: 16px 20px; cursor: pointer; font-size: 14px; color: var(--muted); font-weight: 500; transition: color 0.15s; }
+    nav button:hover { color: var(--text); }
+    nav button.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    main { max-width: 960px; margin: 0 auto; padding: 24px; }
+
+    .tab { display: none; }
+    .tab.active { display: block; }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .card h3 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label { font-size: 12px; font-weight: 500; color: var(--muted); }
+    select, input[type="number"], input[type="text"], input[type="datetime-local"], textarea {
+      border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+      font-size: 14px; font-family: inherit; color: var(--text); background: var(--surface);
+      width: 100%; transition: border-color 0.15s;
+    }
+    select:focus, input:focus, textarea:focus { outline: none; border-color: var(--primary); }
+    textarea { resize: vertical; min-height: 120px; font-family: "SF Mono", "Monaco", monospace; font-size: 12px; }
+
+    .veg-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+    .veg-item { display: flex; gap: 8px; align-items: center; }
+    .veg-item select { flex: 1; }
+    .veg-item input { flex: 1; }
+    .veg-item button { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .veg-item button:hover { color: var(--red); border-color: var(--red); }
+
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; font-family: inherit; transition: background 0.15s; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-outline { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-outline:hover { background: var(--bg); }
+    .btn-danger { background: var(--surface); color: var(--red); border: 1px solid var(--border); }
+    .btn-danger:hover { background: var(--red-bg); border-color: var(--red); }
+    .btn-green { background: var(--surface); color: var(--green); border: 1px solid var(--border); }
+    .btn-green:hover { background: var(--green-bg); border-color: var(--green); }
+    .btn-add { background: none; border: 1px dashed var(--border); border-radius: 6px; padding: 8px; cursor: pointer; font-size: 12px; color: var(--muted); width: 100%; text-align: center; }
+    .btn-add:hover { border-color: var(--primary); color: var(--primary); }
+
+    .results { margin-top: 20px; }
+    .summary-bar { display: flex; gap: 16px; padding: 12px 16px; background: var(--blue-bg); border: 1px solid #bfdbfe; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+    .summary-bar span { color: var(--muted); }
+    .summary-bar strong { color: var(--text); }
+    .summary-pass { background: var(--green-bg); border-color: #bbf7d0; padding: 20px; border-radius: 8px; text-align: center; color: var(--green); font-weight: 600; font-size: 15px; }
+
+    .vuln-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+    .vuln-header { padding: 12px 16px; background: var(--bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+    .vuln-title { font-weight: 600; font-size: 14px; }
+    .vuln-category { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+    .vuln-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+    .written-rule { font-size: 13px; color: var(--muted); font-style: italic; }
+    .mit-section h4 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .mit-section.full h4 { color: var(--green); }
+    .mit-section.bridge h4 { color: var(--yellow); }
+    .mit-section.none h4 { color: var(--red); }
+    .mit-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    .mit-list li { font-size: 13px; padding: 6px 10px; border-radius: 5px; }
+    .mit-section.full .mit-list li { background: var(--green-bg); color: var(--green); }
+    .mit-section.bridge .mit-list li { background: var(--yellow-bg); color: var(--yellow); }
+    .mit-section.none .mit-list li { background: var(--red-bg); color: var(--red); }
+    .mit-desc { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+
+    /* Applied Science */
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .toolbar h2 { font-size: 15px; font-weight: 600; }
+
+    table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    thead tr { background: var(--bg); }
+    th { text-align: left; padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg); }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .badge-draft       { background: #f3f4f6; color: var(--badge-draft); }
+    .badge-under_review { background: #eff6ff; color: var(--badge-review); }
+    .badge-activated   { background: var(--green-bg); color: var(--badge-active); }
+    .badge-deactivated { background: var(--red-bg); color: var(--badge-deactivated); }
+
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border-radius: 10px; padding: 24px; width: 600px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+    .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+    .detail-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-top: 16px; }
+    .detail-panel h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    .detail-section { margin-bottom: 16px; }
+    .detail-section label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 4px; }
+    .code-block { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; overflow-x: auto; }
+
+    .audit-log { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .audit-entry { display: flex; gap: 12px; font-size: 12px; padding: 8px 10px; background: var(--bg); border-radius: 6px; }
+    .audit-entry .ts { color: var(--muted); white-space: nowrap; }
+    .audit-arrow { color: var(--muted); }
+
+    .test-result { margin-top: 12px; padding: 12px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+    .test-pass { background: var(--green-bg); color: var(--green); }
+    .test-fail { background: var(--red-bg); color: var(--red); }
+
+    .empty { text-align: center; color: var(--muted); padding: 32px; font-size: 13px; }
+    .loading { text-align: center; color: var(--muted); padding: 16px; font-size: 13px; }
+    .error-msg { background: var(--red-bg); color: var(--red); border: 1px solid #fca5a5; border-radius: 6px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Stand Mitigation Rules Engine</h1>
+  <nav>
+    <button class="active" onclick="switchTab('underwriter', this)">Underwriter</button>
+    <button onclick="switchTab('applied-science', this)">Applied Science</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ─── UNDERWRITER TAB ─── -->
+  <div id="tab-underwriter" class="tab active">
+    <div class="card">
+      <h2>Property Observations</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Attic Vent Screens</label>
+          <select id="attic_vent_screens">
+            <option value="">— not observed —</option>
+            <option>None</option>
+            <option>Standard</option>
+            <option>Ember Resistant</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Roof Type</label>
+          <select id="roof_type">
+            <option value="">— not observed —</option>
+            <option>Class A</option>
+            <option>Class B</option>
+            <option>Class C</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Window Type</label>
+          <select id="window_type">
+            <option value="">— not observed —</option>
+            <option>Single</option>
+            <option>Double</option>
+            <option>Tempered Glass</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Wildfire Risk Category</label>
+          <select id="wildfire_risk_category">
+            <option value="">— not observed —</option>
+            <option>A</option>
+            <option>B</option>
+            <option>C</option>
+            <option>D</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Home-to-Home Distance (ft)</label>
+          <input type="number" id="home_to_home_distance" placeholder="e.g. 20" min="0" step="0.1" />
+        </div>
+        <div class="form-group">
+          <label>Evaluate As-Of (optional — leave blank for current rules)</label>
+          <input type="datetime-local" id="as_of" />
+        </div>
+        <div class="form-group full">
+          <label>Vegetation</label>
+          <div class="veg-list" id="veg-list"></div>
+          <button class="btn-add" onclick="addVegetation()">+ Add Vegetation Item</button>
+        </div>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-primary" onclick="runEvaluation()">Evaluate Property</button>
+        <button class="btn btn-outline btn-sm" onclick="loadExample()">Load Example</button>
+        <button class="btn btn-outline btn-sm" onclick="clearForm()">Clear</button>
+      </div>
+    </div>
+
+    <div class="results" id="results"></div>
+  </div>
+
+  <!-- ─── APPLIED SCIENCE TAB ─── -->
+  <div id="tab-applied-science" class="tab">
+    <div class="toolbar">
+      <h2>Rules Database</h2>
+      <button class="btn btn-primary btn-sm" onclick="openCreateModal()">+ New Rule</button>
+    </div>
+    <div id="rules-table-container"><div class="loading">Loading rules…</div></div>
+    <div id="rule-detail"></div>
+  </div>
+
+</main>
+
+<!-- ─── CREATE / EDIT RULE MODAL ─── -->
+<div class="modal-overlay" id="rule-modal">
+  <div class="modal">
+    <h2 id="modal-title">New Rule</h2>
+    <input type="hidden" id="modal-rule-id" />
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Slug (unique identifier, snake_case)</label>
+        <input type="text" id="m-slug" placeholder="e.g. roof_class" />
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <input type="text" id="m-category" placeholder="e.g. roof" />
+      </div>
+      <div class="form-group full">
+        <label>Name</label>
+        <input type="text" id="m-name" placeholder="e.g. Roof — Class Rating" />
+      </div>
+      <div class="form-group full">
+        <label>Written Rule (human-readable for policy holders)</label>
+        <textarea id="m-written-rule" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Evaluator Type</label>
+        <select id="m-type">
+          <option value="boolean_condition">boolean_condition</option>
+          <option value="threshold_condition">threshold_condition</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Author Name</label>
+        <input type="text" id="m-author-name" placeholder="Your name" />
+      </div>
+      <div class="form-group full">
+        <label>Definition (JSON)</label>
+        <textarea id="m-definition" rows="10" placeholder='{"condition": {...}}'></textarea>
+      </div>
+      <div class="form-group full">
+        <label>Change Note</label>
+        <input type="text" id="m-change-note" placeholder="Why is this rule being created/updated?" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRule()">Save Draft</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TEST RULE MODAL ─── -->
+<div class="modal-overlay" id="test-modal">
+  <div class="modal">
+    <h2>Test Rule</h2>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;" id="test-modal-subtitle"></p>
+    <div class="form-group">
+      <label>Observations (JSON)</label>
+      <textarea id="test-observations" rows="12" placeholder='{"roof_type": "Class B", "wildfire_risk_category": "B"}'></textarea>
+    </div>
+    <div id="test-result"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeTestModal()">Close</button>
+      <button class="btn btn-primary" onclick="runTest()">Run Test</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let vegetationItems = [];
+let allRules = [];
+let testingRuleId = null;
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'applied-science') loadRules();
+}
+
+// ─── VEGETATION ──────────────────────────────────────────────────────────────
+function addVegetation(type = 'Tree', distance = '') {
+  vegetationItems.push({ type, distance });
+  renderVegetation();
+}
+
+function removeVegetation(i) {
+  vegetationItems.splice(i, 1);
+  renderVegetation();
+}
+
+function renderVegetation() {
+  const list = document.getElementById('veg-list');
+  list.innerHTML = vegetationItems.map((item, i) => `
+    <div class="veg-item">
+      <select onchange="vegetationItems[${i}].type = this.value">
+        ${['Tree','Shrub','Grass'].map(t => `<option ${item.type===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+      <input type="number" value="${item.distance}" placeholder="distance to window (ft)" min="0" step="0.1"
+        onchange="vegetationItems[${i}].distance = parseFloat(this.value) || 0" />
+      <button onclick="removeVegetation(${i})">Remove</button>
+    </div>
+  `).join('');
+}
+
+// ─── EVALUATION ──────────────────────────────────────────────────────────────
+async function runEvaluation() {
+  const obs = buildObservations();
+  const asOf = document.getElementById('as_of').value;
+  const body = { observations: obs };
+  if (asOf) body.as_of = new Date(asOf).toISOString();
+
+  document.getElementById('results').innerHTML = '<div class="loading">Evaluating…</div>';
+  try {
+    const res = await fetch('/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    renderResults(data);
+  } catch (e) {
+    document.getElementById('results').innerHTML = `<div class="error-msg">Request failed: ${e.message}</div>`;
+  }
+}
+
+function buildObservations() {
+  const obs = {};
+  const fields = ['attic_vent_screens','roof_type','window_type','wildfire_risk_category'];
+  fields.forEach(f => {
+    const v = document.getElementById(f).value;
+    if (v) obs[f] = v;
+  });
+  const dist = document.getElementById('home_to_home_distance').value;
+  if (dist) obs.home_to_home_distance = parseFloat(dist);
+  if (vegetationItems.length) {
+    obs.vegetation = vegetationItems.map(v => ({
+      type: v.type,
+      distance_to_window: parseFloat(v.distance) || 0,
+    }));
+  }
+  return obs;
+}
+
+function renderResults(data) {
+  const { vulnerabilities, summary } = data;
+  const asOf = data.as_of;
+  let html = '';
+
+  if (vulnerabilities.length === 0) {
+    html = `<div class="summary-pass">✓ Property passes all active rules<br><small style="font-weight:400; opacity:0.75;">Evaluated as of ${asOf}</small></div>`;
+  } else {
+    html += `
+      <div class="summary-bar">
+        <span>As of <strong>${asOf}</strong></span>
+        <span>Vulnerabilities: <strong>${summary.total_vulnerabilities}</strong></span>
+        <span>Categories: <strong>${summary.categories_affected.join(', ')}</strong></span>
+        ${summary.unmitigatable_count ? `<span style="color:var(--red)">Unmitigatable: <strong>${summary.unmitigatable_count}</strong></span>` : ''}
+        ${summary.bridge_mitigation_count ? `<span style="color:var(--yellow)">Bridge-only: <strong>${summary.bridge_mitigation_count}</strong></span>` : ''}
+      </div>
+    `;
+    vulnerabilities.forEach(v => {
+      const hasFullMit = v.full_mitigations.length > 0;
+      const hasBridge = v.bridge_mitigations.length > 0;
+      html += `
+        <div class="vuln-card">
+          <div class="vuln-header">
+            <div>
+              <div class="vuln-title">${v.rule_name}</div>
+              <div class="vuln-category">${v.category}</div>
+            </div>
+          </div>
+          <div class="vuln-body">
+            <div class="written-rule">${v.written_rule}</div>
+            ${hasFullMit ? `
+              <div class="mit-section full">
+                <h4>Full Mitigations</h4>
+                <ul class="mit-list">
+                  ${v.full_mitigations.map(m => `<li><strong>${m.name}</strong>${m.description ? `<div class="mit-desc">${m.description}</div>` : ''}</li>`).join('')}
+                </ul>
+              </div>` : ''}
+            ${hasBridge ? `
+              <div class="mit-section bridge">
+                <h4>Bridge Mitigations (partial)</h4>
+                <ul class="mit-list">
+                  ${v.bridge_mitigations.map(m => `<li><strong>${m.name}</strong>${m.description ? `<div class="mit-desc">${m.description}</div>` : ''}</li>`).join('')}
+                </ul>
+              </div>` : ''}
+            ${!hasFullMit && !hasBridge ? `
+              <div class="mit-section none">
+                <h4>No Available Mitigations</h4>
+                <ul class="mit-list"><li>This is an unmitigatable property characteristic.</li></ul>
+              </div>` : ''}
+          </div>
+        </div>
+      `;
+    });
+  }
+  document.getElementById('results').innerHTML = html;
+}
+
+function loadExample() {
+  document.getElementById('attic_vent_screens').value = 'None';
+  document.getElementById('roof_type').value = 'Class B';
+  document.getElementById('window_type').value = 'Single';
+  document.getElementById('wildfire_risk_category').value = 'B';
+  document.getElementById('home_to_home_distance').value = '20';
+  vegetationItems = [
+    { type: 'Tree', distance: 25 },
+    { type: 'Shrub', distance: 8 },
+  ];
+  renderVegetation();
+}
+
+function clearForm() {
+  ['attic_vent_screens','roof_type','window_type','wildfire_risk_category'].forEach(f => document.getElementById(f).value = '');
+  document.getElementById('home_to_home_distance').value = '';
+  document.getElementById('as_of').value = '';
+  vegetationItems = [];
+  renderVegetation();
+  document.getElementById('results').innerHTML = '';
+}
+
+// ─── APPLIED SCIENCE ─────────────────────────────────────────────────────────
+async function loadRules() {
+  document.getElementById('rules-table-container').innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const res = await fetch('/admin/rules');
+    allRules = await res.json();
+    renderRulesTable();
+  } catch (e) {
+    document.getElementById('rules-table-container').innerHTML = `<div class="error-msg">Failed to load rules: ${e.message}</div>`;
+  }
+}
+
+function renderRulesTable() {
+  if (!allRules.length) {
+    document.getElementById('rules-table-container').innerHTML = '<div class="empty">No rules found.</div>';
+    return;
+  }
+  const rows = allRules.map(r => `
+    <tr>
+      <td><strong>${r.name}</strong><div style="font-size:11px;color:var(--muted)">${r.slug}</div></td>
+      <td>${r.category}</td>
+      <td><code style="font-size:11px">${r.type}</code></td>
+      <td><span class="badge badge-${r.status}">${r.status.replace('_',' ')}</span></td>
+      <td>${r.author_name}</td>
+      <td>
+        <div class="actions">
+          <button class="btn btn-outline btn-sm" onclick="viewRuleDetail(${r.id})">View</button>
+          ${r.status === 'draft' ? `<button class="btn btn-outline btn-sm" onclick="openEditModal(${r.id})">Edit</button>` : ''}
+          ${r.status === 'draft' ? `<button class="btn btn-green btn-sm" onclick="openTestModal(${r.id})">Test</button>` : ''}
+          ${r.status === 'under_review' ? `<button class="btn btn-green btn-sm" onclick="openTestModal(${r.id})">Test</button>` : ''}
+          ${getTransitionButtons(r)}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  document.getElementById('rules-table-container').innerHTML = `
+    <table>
+      <thead><tr><th>Name / Slug</th><th>Category</th><th>Type</th><th>Status</th><th>Author</th><th>Actions</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function getTransitionButtons(r) {
+  const transitions = {
+    draft: [['Send for Review','under_review','btn-outline'],['Deactivate','deactivated','btn-danger']],
+    under_review: [['Activate','activated','btn-green'],['Back to Draft','draft','btn-outline']],
+    activated: [['Deactivate','deactivated','btn-danger']],
+    deactivated: [],
+  };
+  return (transitions[r.status] || []).map(([label, to, cls]) =>
+    `<button class="btn ${cls} btn-sm" onclick="doTransition(${r.id},'${to}')">${label}</button>`
+  ).join('');
+}
+
+async function doTransition(ruleId, toStatus) {
+  const author = prompt('Your name (for audit log):');
+  if (!author) return;
+  const note = prompt('Change note (optional):') || '';
+  try {
+    const res = await fetch(`/admin/rules/${ruleId}/transition`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_status: toStatus, author_id: author.toLowerCase().replace(/\s+/g,'_'), author_name: author, note }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || 'Transition failed');
+      return;
+    }
+    await loadRules();
+    document.getElementById('rule-detail').innerHTML = '';
+  } catch (e) {
+    alert('Request failed: ' + e.message);
+  }
+}
+
+async function viewRuleDetail(ruleId) {
+  const rule = allRules.find(r => r.id === ruleId);
+  if (!rule) return;
+
+  const auditRes = await fetch(`/admin/rules/${ruleId}/audit`);
+  const audit = await auditRes.json();
+
+  const mitHtml = rule.mitigations.length ? rule.mitigations.map(m => `
+    <div style="padding:6px 10px; background:var(--bg); border-radius:5px; margin-bottom:4px;">
+      <span class="badge ${m.type==='full'?'badge-activated':'badge-under_review'}">${m.type}</span>
+      <strong style="margin-left:6px">${m.name}</strong>
+      ${m.description ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${m.description}</div>` : ''}
+    </div>
+  `).join('') : '<div style="color:var(--muted);font-size:13px">No mitigations (unmitigatable rule)</div>';
+
+  const auditHtml = audit.length ? `<ul class="audit-log">` + audit.map(a => `
+    <li class="audit-entry">
+      <span class="ts">${a.created_at ? new Date(a.created_at).toLocaleString() : '—'}</span>
+      <span><strong>${a.author_name}</strong> <span class="audit-arrow">→</span>
+        <span class="badge badge-${a.to_status}">${a.to_status.replace('_',' ')}</span>
+        ${a.note ? `<span style="color:var(--muted)"> — ${a.note}</span>` : ''}
+      </span>
+    </li>
+  `).join('') + '</ul>' : '<div style="color:var(--muted);font-size:13px">No audit entries</div>';
+
+  document.getElementById('rule-detail').innerHTML = `
+    <div class="detail-panel">
+      <h3>${rule.name} <span class="badge badge-${rule.status}" style="margin-left:8px">${rule.status.replace('_',' ')}</span></h3>
+      <div class="detail-section">
+        <label>Written Rule</label>
+        <div style="font-size:13px;font-style:italic;color:var(--muted)">${rule.written_rule}</div>
+      </div>
+      <div class="detail-section">
+        <label>Definition</label>
+        <pre class="code-block">${JSON.stringify(rule.definition, null, 2)}</pre>
+      </div>
+      <div class="detail-section">
+        <label>Mitigations</label>
+        ${mitHtml}
+      </div>
+      <div class="detail-section">
+        <label>Audit Log</label>
+        ${auditHtml}
+      </div>
+    </div>
+  `;
+  document.getElementById('rule-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ─── CREATE / EDIT MODAL ─────────────────────────────────────────────────────
+function openCreateModal() {
+  document.getElementById('modal-title').textContent = 'New Rule';
+  document.getElementById('modal-rule-id').value = '';
+  ['m-slug','m-category','m-name','m-written-rule','m-definition','m-change-note','m-author-name'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('m-type').value = 'boolean_condition';
+  document.getElementById('m-slug').disabled = false;
+  document.getElementById('rule-modal').classList.add('open');
+}
+
+function openEditModal(ruleId) {
+  const rule = allRules.find(r => r.id === ruleId);
+  if (!rule) return;
+  document.getElementById('modal-title').textContent = 'Edit Draft Rule';
+  document.getElementById('modal-rule-id').value = ruleId;
+  document.getElementById('m-slug').value = rule.slug;
+  document.getElementById('m-slug').disabled = true;
+  document.getElementById('m-category').value = rule.category;
+  document.getElementById('m-name').value = rule.name;
+  document.getElementById('m-written-rule').value = rule.written_rule;
+  document.getElementById('m-type').value = rule.type;
+  document.getElementById('m-definition').value = JSON.stringify(rule.definition, null, 2);
+  document.getElementById('m-change-note').value = rule.change_note || '';
+  document.getElementById('m-author-name').value = rule.author_name || '';
+  document.getElementById('rule-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('rule-modal').classList.remove('open');
+}
+
+async function saveRule() {
+  const ruleId = document.getElementById('modal-rule-id').value;
+  const authorName = document.getElementById('m-author-name').value.trim();
+  if (!authorName) { alert('Author name is required'); return; }
+
+  let definition;
+  try { definition = JSON.parse(document.getElementById('m-definition').value); }
+  catch (e) { alert('Definition is not valid JSON'); return; }
+
+  const payload = {
+    slug: document.getElementById('m-slug').value.trim(),
+    category: document.getElementById('m-category').value.trim(),
+    name: document.getElementById('m-name').value.trim(),
+    written_rule: document.getElementById('m-written-rule').value.trim(),
+    type: document.getElementById('m-type').value,
+    definition,
+    author_id: authorName.toLowerCase().replace(/\s+/g, '_'),
+    author_name: authorName,
+    change_note: document.getElementById('m-change-note').value.trim() || null,
+    mitigations: [],
+  };
+
+  try {
+    const url = ruleId ? `/admin/rules/${ruleId}` : '/admin/rules';
+    const method = ruleId ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || 'Save failed');
+      return;
+    }
+    closeModal();
+    await loadRules();
+  } catch (e) {
+    alert('Request failed: ' + e.message);
+  }
+}
+
+// ─── TEST MODAL ───────────────────────────────────────────────────────────────
+function openTestModal(ruleId) {
+  testingRuleId = ruleId;
+  const rule = allRules.find(r => r.id === ruleId);
+  document.getElementById('test-modal-subtitle').textContent = `Rule: ${rule ? rule.name : ruleId}`;
+  document.getElementById('test-observations').value = JSON.stringify({
+    attic_vent_screens: "None",
+    roof_type: "Class B",
+    window_type: "Single",
+    wildfire_risk_category: "B",
+    home_to_home_distance: 20,
+    vegetation: [{ type: "Tree", distance_to_window: 25 }]
+  }, null, 2);
+  document.getElementById('test-result').innerHTML = '';
+  document.getElementById('test-modal').classList.add('open');
+}
+
+function closeTestModal() {
+  document.getElementById('test-modal').classList.remove('open');
+  testingRuleId = null;
+}
+
+async function runTest() {
+  if (!testingRuleId) return;
+  let observations;
+  try { observations = JSON.parse(document.getElementById('test-observations').value); }
+  catch (e) { alert('Observations must be valid JSON'); return; }
+
+  try {
+    const res = await fetch(`/admin/rules/${testingRuleId}/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ observations }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('test-result').innerHTML = `<div class="test-result test-fail">${data.detail}</div>`;
+      return;
+    }
+    document.getElementById('test-result').innerHTML = data.passes
+      ? `<div class="test-result test-pass">✓ Rule PASSES — no vulnerability triggered</div>`
+      : `<div class="test-result test-fail">✗ Rule FAILS — vulnerability would be triggered</div>`;
+  } catch (e) {
+    document.getElementById('test-result').innerHTML = `<div class="test-result test-fail">Request failed: ${e.message}</div>`;
+  }
+}
+</script>
+</body>
+</html>
