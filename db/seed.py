@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+import time
 from .database import SessionLocal
 from .models import Rule, Mitigation, RuleAuditLog
 
@@ -142,7 +142,7 @@ def seed_rules():
         if db.query(RuleModel).count() > 0:
             return
 
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = 1577836800000  # 2020-01-01 00:00:00 UTC — fixed baseline so historical queries always find seed rules
 
         for rule_data in SEED_RULES:
             rule = Rule(

@@ -68,6 +68,7 @@
     .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; font-family: inherit; transition: background 0.15s; }
     .btn-primary { background: var(--primary); color: white; }
     .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled { background: #a0aec0; cursor: not-allowed; }
     .btn-sm { padding: 5px 10px; font-size: 12px; }
     .btn-outline { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
     .btn-outline:hover { background: var(--bg); }
@@ -114,14 +115,23 @@
     .sim-status.pass { color: var(--green); }
     .sim-status.fail { color: var(--red); }
     .mit-checkbox-list { display: flex; flex-direction: column; gap: 6px; }
-    .mit-checkbox-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--yellow-bg); border-radius: 5px; cursor: pointer; }
-    .mit-checkbox-item input[type="checkbox"] { margin-top: 2px; cursor: pointer; accent-color: var(--primary); width: 14px; height: 14px; flex-shrink: 0; }
+    /* Default (unresolved) — red for full, yellow for bridge */
+    .mit-checkbox-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--yellow-bg); border-radius: 5px; cursor: pointer; transition: background 0.15s; }
+    .mit-checkbox-item input[type="checkbox"] { margin-top: 2px; cursor: pointer; accent-color: var(--yellow); width: 14px; height: 14px; flex-shrink: 0; }
     .mit-checkbox-item label { cursor: pointer; font-size: 13px; color: var(--yellow); }
     .mit-checkbox-item label strong { display: block; }
-    .mit-checkbox-item label span { font-size: 11px; opacity: 0.8; }
+    .mit-checkbox-item label span, .mit-checkbox-item label .mit-desc { font-size: 11px; opacity: 0.8; }
+    .mit-checkbox-item.full-mit { background: var(--red-bg); }
+    .mit-checkbox-item.full-mit label { color: var(--red); }
+    .mit-checkbox-item.full-mit input[type="checkbox"] { accent-color: var(--red); }
+    /* Applied (checked) — green for both types */
+    .mit-checkbox-item.applied { background: var(--green-bg); }
+    .mit-checkbox-item.applied label { color: var(--green); }
+    .mit-checkbox-item.applied input[type="checkbox"] { accent-color: var(--green); }
     .sim-resolved { padding: 8px 12px; border-radius: 5px; font-size: 13px; font-weight: 600; margin-top: 10px; text-align: center; }
     .sim-resolved.pass { background: var(--green-bg); color: var(--green); }
     .sim-resolved.fail { background: var(--red-bg); color: var(--red); }
+    .house-visual { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 
     /* Applied Science */
     .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
@@ -187,7 +197,7 @@
       <div class="form-grid">
         <div class="form-group">
           <label>Attic Vent Screens</label>
-          <select id="attic_vent_screens">
+          <select id="attic_vent_screens" onchange="checkObservations()">
             <option value="">— not observed —</option>
             <option>None</option>
             <option>Standard</option>
@@ -196,7 +206,7 @@
         </div>
         <div class="form-group">
           <label>Roof Type</label>
-          <select id="roof_type">
+          <select id="roof_type" onchange="checkObservations()">
             <option value="">— not observed —</option>
             <option>Class A</option>
             <option>Class B</option>
@@ -205,7 +215,7 @@
         </div>
         <div class="form-group">
           <label>Window Type</label>
-          <select id="window_type">
+          <select id="window_type" onchange="checkObservations()">
             <option value="">— not observed —</option>
             <option>Single</option>
             <option>Double</option>
@@ -214,7 +224,7 @@
         </div>
         <div class="form-group">
           <label>Wildfire Risk Category</label>
-          <select id="wildfire_risk_category">
+          <select id="wildfire_risk_category" onchange="checkObservations()">
             <option value="">— not observed —</option>
             <option>A</option>
             <option>B</option>
@@ -224,15 +234,20 @@
         </div>
         <div class="form-group">
           <label>Home-to-Home Distance (ft)</label>
-          <input type="number" id="home_to_home_distance" placeholder="e.g. 20" min="0" step="0.1" />
+          <input type="number" id="home_to_home_distance" placeholder="e.g. 20" min="0" step="0.1" oninput="checkObservations()" />
         </div>
         <div class="form-group">
-          <label>Rules Active From (optional)</label>
-          <input type="datetime-local" id="from_date" />
-        </div>
-        <div class="form-group">
-          <label>Rules Active To (optional)</label>
-          <input type="datetime-local" id="to_date" />
+          <label>Evaluation Period (optional)</label>
+          <div style="display:flex; flex-direction:column; gap:6px">
+            <div>
+              <div style="font-size:11px; color:var(--muted); margin-bottom:3px">From</div>
+              <input type="datetime-local" id="from_date" />
+            </div>
+            <div>
+              <div style="font-size:11px; color:var(--muted); margin-bottom:3px">To</div>
+              <input type="datetime-local" id="to_date" />
+            </div>
+          </div>
         </div>
         <div class="form-group full">
           <label>Vegetation</label>
@@ -241,7 +256,7 @@
         </div>
       </div>
       <div style="margin-top:16px; display:flex; gap:8px; align-items:center;">
-        <button class="btn btn-primary" onclick="runEvaluation()">Evaluate Property</button>
+        <button id="btn-evaluate" class="btn btn-primary" onclick="runEvaluation()" disabled>Evaluate Property</button>
         <button class="btn btn-outline btn-sm" onclick="loadExample()">Load Example</button>
         <button class="btn btn-outline btn-sm" onclick="clearForm()">Clear</button>
       </div>
@@ -305,6 +320,7 @@
       </div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="loadRandomRule()" style="margin-right:auto">Load Random Rule</button>
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveRule()">Save Draft</button>
     </div>
@@ -352,12 +368,47 @@
 </div>
 
 <script>
+// ─── TIMEZONE HELPERS (Eastern Time) ─────────────────────────────────────────
+function msToEastern(ms) {
+  // Accept epoch-ms integers (new format) or legacy datetime strings (old DB).
+  const d = typeof ms === 'number' ? new Date(ms) : new Date(String(ms).replace(' ', 'T'));
+  if (isNaN(d.getTime())) return String(ms);
+  // Safari throws "The string did not match the expected pattern" on toLocaleString
+  // when hour12:false is combined with hour:'2-digit' — wrap and fall back to UTC ISO.
+  try {
+    return d.toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).replace(',', '') + ' ET';
+  } catch (_) {
+    return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  }
+}
+
+// Convert a datetime-local string (treated as Eastern time) to epoch milliseconds.
+// datetime-local values can be "YYYY-MM-DDTHH:MM", "YYYY-MM-DDTHH:MM:SS", or
+// "YYYY-MM-DDTHH:MM:SS.SSS" — normalize to the first 16 chars before appending
+// ":00Z" so the constructed UTC string is always valid ISO 8601.
+function easternInputToMs(dtStr) {
+  if (!dtStr) return null;
+  const base = dtStr.slice(0, 16); // "YYYY-MM-DDTHH:MM" — strips seconds if present
+  const approxUtc = new Date(base + ':00Z');
+  const etStr = approxUtc.toLocaleString('sv-SE', { timeZone: 'America/New_York' });
+  const etAsUtc = new Date(etStr.replace(' ', 'T') + 'Z');
+  const offset = approxUtc.getTime() - etAsUtc.getTime();
+  return new Date(base + ':00Z').getTime() + offset;
+}
+
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let vegetationItems = [];
 let allRules = [];
 let testingRuleId = null;
-let baseObservations = {};   // original observations without applied mitigations
-let appliedMitigations = new Set();  // slugs of currently selected bridge mitigations
+let baseObservations = {};
+let appliedMitigations = new Set();
+let appliedFullMitigations = new Set();
+let lastEvaluationData = null;
 let lastAsOf = null;
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
@@ -392,12 +443,23 @@ function renderVegetation() {
       <button onclick="removeVegetation(${i})">Remove</button>
     </div>
   `).join('');
+  checkObservations();
+}
+
+function checkObservations() {
+  const fields = ['attic_vent_screens','roof_type','window_type','wildfire_risk_category'];
+  const anyField = fields.some(id => document.getElementById(id).value !== '');
+  const hasDist  = document.getElementById('home_to_home_distance').value.trim() !== '';
+  const hasVeg   = vegetationItems.length > 0;
+  document.getElementById('btn-evaluate').disabled = !(anyField || hasDist || hasVeg);
 }
 
 // ─── EVALUATION ──────────────────────────────────────────────────────────────
 async function runEvaluation() {
   baseObservations = buildObservations();
   appliedMitigations = new Set();
+  appliedFullMitigations = new Set();
+  lastEvaluationData = null;
   await evaluateWithMitigations();
 }
 
@@ -409,8 +471,8 @@ async function evaluateWithMitigations() {
   const toVal   = document.getElementById('to_date').value;
 
   const body = { observations: obs };
-  if (fromVal) body.from_date = new Date(fromVal).toISOString();
-  if (toVal)   body.to_date   = new Date(toVal).toISOString();
+  if (fromVal) body.from_date = easternInputToMs(fromVal);
+  if (toVal)   body.to_date   = easternInputToMs(toVal);
 
   try {
     const res = await fetch('/evaluate', {
@@ -452,21 +514,196 @@ function buildObservations() {
   return obs;
 }
 
+// ─── HOUSE VISUAL ────────────────────────────────────────────────────────────
+function buildHouseVisual(obs, violations, bridgeMits, fullMits) {
+  const W = 680, H = 370;
+  const ground = 295;
+  const hW = 175, hH = 120, hX = 265;
+  const hTop = ground - hH, hMid = hX + hW / 2, roofPeak = hTop - 65, roofOH = 14;
+
+  const roofType  = obs.roof_type || '';
+  const ventType  = obs.attic_vent_screens || '';
+  const winType   = obs.window_type || '';
+  const hhDist    = typeof obs.home_to_home_distance === 'number' ? obs.home_to_home_distance : null;
+  const veg       = obs.vegetation || [];
+  const wfRisk    = obs.wildfire_risk_category || '';
+
+  const roofVuln = violations.has('roof_class');
+  const ventVuln = violations.has('attic_vent_screens');
+  const hhVuln   = violations.has('home_to_home_distance');
+  const vegVuln  = violations.has('windows_vegetation_distance');
+
+  const roofReplaced  = fullMits.has('Replace Roof with Class A Assembly');
+  const ventsFixed    = fullMits.has('Install Ember-Resistant Vents');
+  const vegRemoved    = fullMits.has('Remove Vegetation');
+  const winsReplaced  = fullMits.has('Replace Windows with Tempered Glass');
+  const filmApplied   = bridgeMits.has('apply_window_film');
+  const retardant     = bridgeMits.has('apply_flame_retardant_shrubs');
+  const pruneTrees    = bridgeMits.has('prune_trees');
+
+  const roofOK  = roofReplaced || !roofVuln;
+  const ventsOK = ventsFixed   || !ventVuln;
+  const hhOK    = !hhVuln;
+
+  const roofFill   = roofOK  ? '#3d4a5c' : '#c0392b';
+  const roofEdge   = roofOK  ? '#2c3e50' : '#a93226';
+  const ventFill   = ventsOK ? '#27ae60' : '#e74c3c';
+  const winFill    = winsReplaced ? '#aad4f5' : filmApplied ? '#c3e6f7' : '#dff0ff';
+  const winEdge    = winsReplaced ? '#2471a3' : '#3498db';
+  const effectiveWinType = winsReplaced ? 'Tempered Glass' : winType;
+
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"
+    style="width:100%;display:block">
+  <defs>
+    <linearGradient id="hSky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7ec8e3"/>
+      <stop offset="100%" stop-color="#d6eeff"/>
+    </linearGradient>
+    <linearGradient id="hGnd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5cb85c"/>
+      <stop offset="100%" stop-color="#3a7a3a"/>
+    </linearGradient>
+  </defs>
+  <rect width="${W}" height="${ground}" fill="url(#hSky)"/>
+  <rect y="${ground}" width="${W}" height="${H-ground}" fill="url(#hGnd)"/>`;
+
+  // ── Wildfire risk badge ──
+  if (wfRisk) {
+    const rc = {A:'#27ae60',B:'#e67e22',C:'#d35400',D:'#c0392b'}[wfRisk] || '#7f8c8d';
+    s += `<rect x="10" y="10" width="78" height="22" rx="4" fill="${rc}" opacity="0.9"/>
+    <text x="49" y="25" text-anchor="middle" font-size="11" fill="white" font-weight="700">Risk Cat ${wfRisk}</text>`;
+  }
+
+  // ── Neighbor house ──
+  if (hhDist !== null) {
+    const gap = Math.min(140, Math.max(28, hhDist * 2.2));
+    const nW = 85, nH = 85, nX = hX - gap - nW;
+    const nMid = nX + nW/2, nTop2 = ground - nH, nPeak2 = nTop2 - 44;
+    const nc = hhOK ? '#7f8c8d' : '#c0392b', nr = hhOK ? '#5d6d7e' : '#922b21';
+    if (nX > 5) {
+      s += `<polygon points="${nMid},${nPeak2} ${nX-8},${nTop2} ${nX+nW+8},${nTop2}" fill="${nr}" opacity="0.8"/>
+      <rect x="${nX}" y="${nTop2}" width="${nW}" height="${nH}" fill="${nc}" opacity="0.8"/>
+      <rect x="${nMid-11}" y="${ground-32}" width="22" height="32" fill="#5d4037" opacity="0.8"/>`;
+      const ly = ground - 10, lc = hhOK ? '#27ae60' : '#e74c3c';
+      s += `<line x1="${nX+nW}" y1="${ly}" x2="${hX}" y2="${ly}" stroke="${lc}" stroke-width="1.5" stroke-dasharray="5,3"/>
+      <text x="${(nX+nW+hX)/2}" y="${ly-4}" text-anchor="middle" font-size="11" fill="${lc}" font-weight="600">${hhDist} ft</text>`;
+    }
+  }
+
+  // ── House walls ──
+  s += `<rect x="${hX}" y="${hTop}" width="${hW}" height="${hH}" fill="#f5efe6" stroke="#c9ae8a" stroke-width="1.5"/>`;
+
+  // ── Roof ──
+  s += `<polygon points="${hMid},${roofPeak} ${hX-roofOH},${hTop+6} ${hX+hW+roofOH},${hTop+6}" fill="${roofFill}" stroke="${roofEdge}" stroke-width="2"/>`;
+  if (roofType || roofReplaced) {
+    const lbl = roofReplaced && roofVuln ? 'Class A ✓' : roofType;
+    s += `<text x="${hMid}" y="${Math.round((roofPeak+hTop+6)/2)+5}" text-anchor="middle" font-size="11" fill="${roofOK?'#ecf0f1':'#fadbd8'}" font-weight="700">${lbl}</text>`;
+  }
+
+  // ── Attic vents ──
+  const vy = hTop + 2;
+  [-28, 28].forEach(dx => {
+    const vx = hMid + dx;
+    s += `<rect x="${vx-7}" y="${vy-7}" width="14" height="10" rx="2" fill="${ventFill}" stroke="${ventsOK?'#1e8449':'#a93226'}" stroke-width="1.5"/>`;
+    for (let gx = -3; gx <= 3; gx += 3)
+      s += `<line x1="${vx+gx}" y1="${vy-7}" x2="${vx+gx}" y2="${vy+3}" stroke="white" stroke-width="0.8" opacity="0.7"/>`;
+  });
+
+  // ── Windows ──
+  const wy = hTop + 22, wW = 38, wH = 46;
+  [hX+20, hX+hW-20-wW].forEach(wx => {
+    s += `<rect x="${wx}" y="${wy}" width="${wW}" height="${wH}" fill="${winFill}" stroke="${winEdge}" stroke-width="2"/>
+    <line x1="${wx}" y1="${wy+wH/2}" x2="${wx+wW}" y2="${wy+wH/2}" stroke="${winEdge}" stroke-width="1.5"/>
+    <line x1="${wx+wW/2}" y1="${wy}" x2="${wx+wW/2}" y2="${wy+wH}" stroke="${winEdge}" stroke-width="1.5"/>`;
+    if (filmApplied && !winsReplaced)
+      s += `<rect x="${wx}" y="${wy}" width="${wW}" height="${wH}" fill="#5dade2" opacity="0.2"/>`;
+  });
+  if (effectiveWinType)
+    s += `<text x="${hMid}" y="${wy+wH+13}" text-anchor="middle" font-size="9" fill="#7f8c8d">${effectiveWinType}</text>`;
+
+  // ── Door ──
+  const dW = 30, dH = 50;
+  s += `<rect x="${hMid-dW/2}" y="${ground-dH}" width="${dW}" height="${dH}" fill="#7b5a2a" stroke="#5d4037" stroke-width="1.5" rx="2"/>
+  <circle cx="${hMid+dW/2-6}" cy="${ground-dH/2}" r="2.5" fill="#f0c040"/>`;
+
+  // ── Vegetation ──
+  const rightEdge = hX + hW;
+  if (veg.length > 0 && !vegRemoved) {
+    const maxDist = Math.max(...veg.map(v => v.distance_to_window || 0), 1);
+    const avail = W - rightEdge - 30;
+    const sc = Math.min(2.2, avail / maxDist * 0.88);
+
+    veg.forEach(item => {
+      const dist = item.distance_to_window || 0;
+      const vx = rightEdge + dist * sc;
+      const isTree = item.type === 'Tree', isShrub = item.type === 'Shrub';
+      const mitigated = (pruneTrees && isTree) || (retardant && isShrub);
+      const ok = mitigated || !vegVuln;
+      const vc = ok ? '#27ae60' : '#c0392b', ve = ok ? '#1e8449' : '#922b21';
+
+      if (isTree) {
+        const th = pruneTrees ? 36 : 62, tw = 26, ttop = ground - th - 10;
+        s += `<rect x="${vx-3}" y="${ground-12}" width="6" height="12" fill="#8d6e43"/>
+        <polygon points="${vx},${ttop} ${vx-tw/2},${ttop+th} ${vx+tw/2},${ttop+th}" fill="${vc}" stroke="${ve}" stroke-width="1.5"/>`;
+      } else if (isShrub) {
+        s += `<ellipse cx="${vx}" cy="${ground-10}" rx="14" ry="11" fill="${vc}" stroke="${ve}" stroke-width="1.5"/>`;
+      }
+      s += `<text x="${vx}" y="${ground+14}" text-anchor="middle" font-size="10" fill="#333" font-weight="500">${dist}ft</text>
+      <text x="${vx}" y="${ground+24}" text-anchor="middle" font-size="9" fill="#666">${item.type}</text>`;
+
+      // Distance line
+      const ly2 = wy + wH/2;
+      const lc2 = ok ? '#27ae60' : '#e74c3c';
+      s += `<line x1="${rightEdge}" y1="${ly2}" x2="${vx}" y2="${ly2}" stroke="${lc2}" stroke-width="1" stroke-dasharray="4,3" opacity="0.65"/>`;
+    });
+  } else if (vegRemoved && vegVuln) {
+    s += `<text x="${rightEdge+55}" y="${ground-55}" text-anchor="middle" font-size="12" fill="#27ae60" font-weight="600">Vegetation Removed ✓</text>`;
+  }
+
+  s += `</svg>`;
+  return s;
+}
+
+function toggleFullMitigation(name) {
+  if (appliedFullMitigations.has(name)) appliedFullMitigations.delete(name);
+  else appliedFullMitigations.add(name);
+  // Re-render just the house visual without a server round-trip
+  if (lastEvaluationData) renderResultsView(lastEvaluationData);
+}
+
 function renderResults(data) {
+  lastEvaluationData = data;
+  renderResultsView(data);
+}
+
+function renderResultsView(data) {
   const { vulnerabilities, summary } = data;
-  const asOf = data.as_of;
-  let html = '';
+
+  // Derive violation slugs for the house visual
+  const violations = new Set(vulnerabilities.map(v => v.rule_slug));
+
+  const fmtFrom = data.from_date != null ? msToEastern(data.from_date) : null;
+  const fmtTo   = data.to_date   != null ? msToEastern(data.to_date)   : null;
+  const fmtAt   = data.evaluated_at != null ? msToEastern(data.evaluated_at) : '';
+  const periodLabel = fmtFrom && fmtTo
+    ? `${fmtFrom} → ${fmtTo}`
+    : fmtFrom ? `from ${fmtFrom}`
+    : fmtTo   ? `to ${fmtTo}`
+    : `current rules (${fmtAt})`;
+
+  // House visual always shown after evaluation
+  let html = `<div class="house-visual">${buildHouseVisual(baseObservations, violations, appliedMitigations, appliedFullMitigations)}</div>`;
 
   if (vulnerabilities.length === 0) {
-    html = `<div class="summary-pass">✓ Property passes all active rules<br><small style="font-weight:400; opacity:0.75;">Evaluated as of ${asOf}</small></div>`;
+    html += `<div class="summary-pass">✓ Property passes all active rules<br><small style="font-weight:400; opacity:0.75;">Evaluated: ${periodLabel}</small></div>`;
   } else {
-    const rangeLabel = data.from_date && data.to_date
-      ? `<span>Period: <strong>${data.from_date}</strong> → <strong>${data.to_date}</strong></span>`
-      : data.from_date
-        ? `<span>From: <strong>${data.from_date}</strong></span>`
-      : data.to_date
-        ? `<span>To: <strong>${data.to_date}</strong></span>`
-      : `<span>Evaluated at: <strong>${data.evaluated_at}</strong></span>`;
+    const rangeLabel = fmtFrom && fmtTo
+      ? `<span>Period: <strong>${fmtFrom}</strong> → <strong>${fmtTo}</strong></span>`
+      : fmtFrom
+        ? `<span>From: <strong>${fmtFrom}</strong></span>`
+      : fmtTo
+        ? `<span>To: <strong>${fmtTo}</strong></span>`
+      : `<span>Evaluated at: <strong>${fmtAt}</strong></span>`;
 
     html += `
       <div class="summary-bar">
@@ -479,7 +716,7 @@ function renderResults(data) {
     `;
     vulnerabilities.forEach(v => {
       const hasFullMit = v.full_mitigations.length > 0;
-      const hasBridge = v.bridge_mitigations.length > 0;
+      const hasBridge  = v.bridge_mitigations.length > 0;
       const hasSimulator = v.violation_details && v.violation_details.length > 0 && hasBridge;
 
       html += `
@@ -495,9 +732,17 @@ function renderResults(data) {
             ${hasFullMit ? `
               <div class="mit-section full">
                 <h4>Full Mitigations</h4>
-                <ul class="mit-list">
-                  ${v.full_mitigations.map(m => `<li><strong>${m.name}</strong>${m.description ? `<div class="mit-desc">${m.description}</div>` : ''}</li>`).join('')}
-                </ul>
+                <div class="mit-checkbox-list">
+                  ${v.full_mitigations.map(m => {
+                    const id = 'fmit-' + m.name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+                    const isApplied = appliedFullMitigations.has(m.name);
+                    const esc = m.name.replace(/'/g, "\\'");
+                    return `<div class="mit-checkbox-item full-mit${isApplied ? ' applied' : ''}">
+                      <input type="checkbox" id="${id}" ${isApplied ? 'checked' : ''} onchange="toggleFullMitigation('${esc}')"/>
+                      <label for="${id}"><strong>${m.name}</strong>${m.description ? `<div class="mit-desc">${m.description}</div>` : ''}</label>
+                    </div>`;
+                  }).join('')}
+                </div>
               </div>` : ''}
             ${hasSimulator ? renderSimulator(v) : hasBridge ? `
               <div class="mit-section bridge">
@@ -534,10 +779,10 @@ function renderSimulator(v) {
     .filter(m => m.modifier_params && m.modifier_params.slug)
     .map(m => {
       const slug = m.modifier_params.slug;
-      const checked = appliedMitigations.has(slug) ? 'checked' : '';
+      const isApplied = appliedMitigations.has(slug);
       return `
-        <div class="mit-checkbox-item">
-          <input type="checkbox" id="mit-${slug}" ${checked} onchange="toggleMitigation('${slug}')" />
+        <div class="mit-checkbox-item${isApplied ? ' applied' : ''}">
+          <input type="checkbox" id="mit-${slug}" ${isApplied ? 'checked' : ''} onchange="toggleMitigation('${slug}')" />
           <label for="mit-${slug}">
             <strong>${m.name}</strong>
             <span>${m.description || ''}</span>
@@ -681,8 +926,9 @@ async function confirmTransition() {
       }),
     });
     if (!res.ok) {
-      const err = await res.json();
-      alert(err.detail || 'Transition failed');
+      let message = `Server error (${res.status})`;
+      try { const err = await res.json(); message = err.detail || message; } catch (_) {}
+      alert(message);
       return;
     }
     closeTransitionModal();
@@ -710,7 +956,7 @@ async function viewRuleDetail(ruleId) {
 
   const auditHtml = audit.length ? `<ul class="audit-log">` + audit.map(a => `
     <li class="audit-entry">
-      <span class="ts">${a.created_at ? new Date(a.created_at).toLocaleString() : '—'}</span>
+      <span class="ts">${a.created_at != null ? msToEastern(a.created_at) : '—'}</span>
       <span><strong>${a.author_name}</strong> <span class="audit-arrow">→</span>
         <span class="badge badge-${a.to_status}">${a.to_status.replace('_',' ')}</span>
         ${a.note ? `<span style="color:var(--muted)"> — ${a.note}</span>` : ''}
@@ -724,6 +970,16 @@ async function viewRuleDetail(ruleId) {
       <div class="detail-section">
         <label>Written Rule</label>
         <div style="font-size:13px;font-style:italic;color:var(--muted)">${rule.written_rule}</div>
+      </div>
+      <div class="detail-section" style="display:flex;gap:32px">
+        <div>
+          <label>Activated</label>
+          <div style="font-size:13px">${rule.activated_at != null ? msToEastern(rule.activated_at) : '—'}</div>
+        </div>
+        <div>
+          <label>Deactivated</label>
+          <div style="font-size:13px">${rule.deactivated_at != null ? msToEastern(rule.deactivated_at) : '—'}</div>
+        </div>
       </div>
       <div class="detail-section">
         <label>Definition</label>
@@ -804,8 +1060,9 @@ async function saveRule() {
       method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const err = await res.json();
-      alert(err.detail || 'Save failed');
+      let message = `Server error (${res.status})`;
+      try { const err = await res.json(); message = err.detail || message; } catch (_) {}
+      alert(message);
       return;
     }
     closeModal();
@@ -835,6 +1092,33 @@ function openTestModal(ruleId) {
 function closeTestModal() {
   document.getElementById('test-modal').classList.remove('open');
   testingRuleId = null;
+}
+
+async function loadRandomRule() {
+  let rules = allRules;
+  if (!rules.length) {
+    try {
+      const res = await fetch('/admin/rules');
+      rules = await res.json();
+    } catch (e) {
+      alert('Failed to load rules: ' + e.message);
+      return;
+    }
+  }
+  if (!rules.length) {
+    alert('No rules available to use as a template.');
+    return;
+  }
+  const rule = rules[Math.floor(Math.random() * rules.length)];
+  document.getElementById('m-slug').value = rule.slug + '_copy';
+  document.getElementById('m-slug').disabled = false;
+  document.getElementById('m-category').value = rule.category;
+  document.getElementById('m-name').value = rule.name + ' (Copy)';
+  document.getElementById('m-written-rule').value = rule.written_rule;
+  document.getElementById('m-type').value = rule.type;
+  document.getElementById('m-definition').value = JSON.stringify(rule.definition, null, 2);
+  document.getElementById('m-change-note').value = '';
+  document.getElementById('m-author-name').value = '';
 }
 
 async function runTest() {

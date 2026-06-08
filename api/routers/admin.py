@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+import time
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -103,7 +103,7 @@ def transition_rule(rule_id: int, payload: TransitionRequest, db: Session = Depe
         )
 
     from_status = rule.status
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = int(time.time() * 1000)
 
     if payload.to_status == "activated":
         # Atomically deactivate any currently active version of this slug
@@ -191,7 +191,7 @@ def get_rule_audit(rule_id: int, db: Session = Depends(get_db)):
             "author_id": log.author_id,
             "author_name": log.author_name,
             "note": log.note,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
+            "created_at": log.created_at,
         }
         for log in logs
     ]
@@ -219,12 +219,12 @@ def _fmt(rule: Rule) -> dict:
         "type": rule.type,
         "definition": json.loads(rule.definition),
         "status": rule.status,
-        "activated_at": rule.activated_at.isoformat() if rule.activated_at else None,
-        "deactivated_at": rule.deactivated_at.isoformat() if rule.deactivated_at else None,
+        "activated_at": rule.activated_at,
+        "deactivated_at": rule.deactivated_at,
         "author_id": rule.author_id,
         "author_name": rule.author_name,
         "change_note": rule.change_note,
-        "created_at": rule.created_at.isoformat() if rule.created_at else None,
+        "created_at": rule.created_at,
         "mitigations": [
             {
                 "id": m.id,

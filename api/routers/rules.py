@@ -1,5 +1,4 @@
 from typing import Optional
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -11,8 +10,8 @@ router = APIRouter()
 
 
 @router.get("/rules")
-def list_rules(as_of: Optional[datetime] = None, db: Session = Depends(get_db)):
-    rules = query_active_rules_at(db, as_of) if as_of else query_active_rules(db)
+def list_rules(as_of: Optional[int] = None, db: Session = Depends(get_db)):
+    rules = query_active_rules_at(db, as_of) if as_of is not None else query_active_rules(db)
     return [_format_rule(r) for r in rules]
 
 

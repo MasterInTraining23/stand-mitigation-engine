@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+import time
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -16,8 +16,8 @@ EVALUATORS = {
 def evaluate_property(
     observations: dict,
     db: Session,
-    from_date: Optional[datetime] = None,
-    to_date: Optional[datetime] = None,
+    from_date: Optional[int] = None,
+    to_date: Optional[int] = None,
 ):
     rules = rule_cache.get_active_rules(db, from_date=from_date, to_date=to_date)
     vulnerabilities = []
@@ -62,9 +62,9 @@ def evaluate_property(
     ]
 
     return {
-        "from_date": from_date.strftime("%Y-%m-%dT%H:%M:%SZ") if from_date else None,
-        "to_date": to_date.strftime("%Y-%m-%dT%H:%M:%SZ") if to_date else None,
-        "evaluated_at": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "from_date": from_date,
+        "to_date": to_date,
+        "evaluated_at": int(time.time() * 1000),
         "vulnerabilities": vulnerabilities,
         "summary": {
             "total_vulnerabilities": len(vulnerabilities),

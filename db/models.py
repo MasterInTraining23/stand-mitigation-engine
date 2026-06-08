@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+import time
+from sqlalchemy import Column, Integer, BigInteger, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -15,12 +15,12 @@ class Rule(Base):
     type = Column(String, nullable=False)
     definition = Column(Text, nullable=False)
     status = Column(String, nullable=False, default="draft")
-    activated_at = Column(DateTime, nullable=True)
-    deactivated_at = Column(DateTime, nullable=True)
+    activated_at = Column(BigInteger, nullable=True)
+    deactivated_at = Column(BigInteger, nullable=True)
     author_id = Column(String, nullable=False)
     author_name = Column(String, nullable=False)
     change_note = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(BigInteger, default=lambda: int(time.time() * 1000))
 
     mitigations = relationship("Mitigation", back_populates="rule", cascade="all, delete-orphan")
     audit_logs = relationship("RuleAuditLog", back_populates="rule")
@@ -49,6 +49,6 @@ class RuleAuditLog(Base):
     author_id = Column(String, nullable=False)
     author_name = Column(String, nullable=False)
     note = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(BigInteger, default=lambda: int(time.time() * 1000))
 
     rule = relationship("Rule", back_populates="audit_logs")

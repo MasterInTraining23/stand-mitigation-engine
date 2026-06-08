@@ -67,8 +67,8 @@ class TestEvaluationEndpoint:
         create_and_activate_rule(client, ROOF_RULE)
         res = client.post("/evaluate", json={
             "observations": {"roof_type": "Class B", "wildfire_risk_category": "B"},
-            "from_date": "2000-01-01T00:00:00Z",
-            "to_date":   "2000-06-01T00:00:00Z",
+            "from_date": 946684800000,   # 2000-01-01
+            "to_date":   959817600000,   # 2000-06-01
         })
         assert res.status_code == 200
         assert res.json()["vulnerabilities"] == []
@@ -77,8 +77,8 @@ class TestEvaluationEndpoint:
         create_and_activate_rule(client, ROOF_RULE)
         res = client.post("/evaluate", json={
             "observations": {"roof_type": "Class B", "wildfire_risk_category": "B"},
-            "from_date": "2000-01-01T00:00:00Z",
-            "to_date":   "2099-01-01T00:00:00Z",
+            "from_date": 946684800000,    # 2000-01-01
+            "to_date":   4070908800000,   # 2099-01-01
         })
         assert res.status_code == 200
         assert len(res.json()["vulnerabilities"]) == 1
@@ -86,10 +86,81 @@ class TestEvaluationEndpoint:
     def test_invalid_range_returns_422(self, client):
         res = client.post("/evaluate", json={
             "observations": {},
-            "from_date": "2026-06-01T00:00:00Z",
-            "to_date":   "2025-01-01T00:00:00Z",
+            "from_date": 1748736000000,  # 2026-06-01
+            "to_date":   1735689600000,  # 2025-01-01
         })
         assert res.status_code == 422
+
+    def test_response_timestamps_are_integers(self, client):
+        """evaluated_at, from_date, to_date must all be epoch-ms integers, not strings.
+        A string timestamp causes toLocaleString() to throw in Safari with
+        'The string did not match the expected pattern'."""
+        create_and_activate_rule(client, ROOF_RULE)
+        res = client.post("/evaluate", json={
+            "observations": {"roof_type": "Class B"},
+            "from_date": 946684800000,
+            "to_date":   4070908800000,
+        })
+        data = res.json()
+        assert res.status_code == 200
+        assert isinstance(data["evaluated_at"], int)
+        assert isinstance(data["from_date"], int)
+        assert isinstance(data["to_date"], int)
+
+    def test_example_property_evaluation(self, client):
+        """The full example-property payload (all four rule fields + vegetation) must
+        evaluate without error and return at least one vulnerability."""
+        from db.seed import SEED_RULES
+        import json
+        from db.database import SessionLocal
+        from db.models import Rule, Mitigation
+        # Seed rules are activated at a fixed past time — just activate them via the API
+        for rule_data in SEED_RULES:
+            r = client.post("/admin/rules", json={
+                "slug": rule_data["slug"],
+                "category": rule_data["category"],
+                "name": rule_data["name"],
+                "written_rule": rule_data["written_rule"],
+                "type": rule_data["type"],
+                "definition": rule_data["definition"],
+                "author_id": "test",
+                "author_name": "Test",
+                "mitigations": [
+                    {"type": m["type"], "name": m["name"],
+                     "description": m.get("description"),
+                     "modifier_params": m.get("modifier_params")}
+                    for m in rule_data.get("mitigations", [])
+                ],
+            })
+            rule_id = r.json()["id"]
+            client.post(f"/admin/rules/{rule_id}/transition",
+                        json={"to_status": "under_review", "author_id": "t", "author_name": "T"})
+            client.post(f"/admin/rules/{rule_id}/transition",
+                        json={"to_status": "activated", "author_id": "t", "author_name": "T"})
+
+        res = client.post("/evaluate", json={
+            "observations": {
+                "attic_vent_screens": "None",
+                "roof_type": "Class B",
+                "window_type": "Single",
+                "wildfire_risk_category": "B",
+                "home_to_home_distance": 20,
+                "vegetation": [
+                    {"type": "Tree",  "distance_to_window": 25},
+                    {"type": "Shrub", "distance_to_window": 8},
+                ],
+            }
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert isinstance(data["evaluated_at"], int)
+        assert data["from_date"] is None
+        assert data["to_date"] is None
+        slugs = {v["rule_slug"] for v in data["vulnerabilities"]}
+        assert "attic_vent_screens" in slugs
+        assert "roof_class" in slugs
+        assert "windows_vegetation_distance" in slugs
+        assert "home_to_home_distance" not in slugs  # 20 ft >= 15 ft threshold → passes
 
 
 class TestAdminRules:
