@@ -368,36 +368,39 @@
 </div>
 
 <script>
-// ─── TIMEZONE HELPERS (Eastern Time) ─────────────────────────────────────────
-function msToEastern(ms) {
+// ─── TIMEZONE HELPERS (local timezone) ───────────────────────────────────────
+function msToLocal(ms) {
   // Accept epoch-ms integers (new format) or legacy datetime strings (old DB).
   const d = typeof ms === 'number' ? new Date(ms) : new Date(String(ms).replace(' ', 'T'));
   if (isNaN(d.getTime())) return String(ms);
   // Safari throws "The string did not match the expected pattern" on toLocaleString
   // when hour12:false is combined with hour:'2-digit' — wrap and fall back to UTC ISO.
   try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tzAbbr = d.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
     return d.toLocaleString('en-US', {
-      timeZone: 'America/New_York',
+      timeZone: tz,
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
       hour12: false,
-    }).replace(',', '') + ' ET';
+    }).replace(',', '') + ' ' + tzAbbr;
   } catch (_) {
     return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   }
 }
 
-// Convert a datetime-local string (treated as Eastern time) to epoch milliseconds.
+// Convert a datetime-local string (treated as local time) to epoch milliseconds.
 // datetime-local values can be "YYYY-MM-DDTHH:MM", "YYYY-MM-DDTHH:MM:SS", or
 // "YYYY-MM-DDTHH:MM:SS.SSS" — normalize to the first 16 chars before appending
 // ":00Z" so the constructed UTC string is always valid ISO 8601.
-function easternInputToMs(dtStr) {
+function localInputToMs(dtStr) {
   if (!dtStr) return null;
   const base = dtStr.slice(0, 16); // "YYYY-MM-DDTHH:MM" — strips seconds if present
   const approxUtc = new Date(base + ':00Z');
-  const etStr = approxUtc.toLocaleString('sv-SE', { timeZone: 'America/New_York' });
-  const etAsUtc = new Date(etStr.replace(' ', 'T') + 'Z');
-  const offset = approxUtc.getTime() - etAsUtc.getTime();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const localStr = approxUtc.toLocaleString('sv-SE', { timeZone: tz });
+  const localAsUtc = new Date(localStr.replace(' ', 'T') + 'Z');
+  const offset = approxUtc.getTime() - localAsUtc.getTime();
   return new Date(base + ':00Z').getTime() + offset;
 }
 
@@ -471,8 +474,8 @@ async function evaluateWithMitigations() {
   const toVal   = document.getElementById('to_date').value;
 
   const body = { observations: obs };
-  if (fromVal) body.from_date = easternInputToMs(fromVal);
-  if (toVal)   body.to_date   = easternInputToMs(toVal);
+  if (fromVal) body.from_date = localInputToMs(fromVal);
+  if (toVal)   body.to_date   = localInputToMs(toVal);
 
   try {
     const res = await fetch('/evaluate', {
@@ -682,9 +685,9 @@ function renderResultsView(data) {
   // Derive violation slugs for the house visual
   const violations = new Set(vulnerabilities.map(v => v.rule_slug));
 
-  const fmtFrom = data.from_date != null ? msToEastern(data.from_date) : null;
-  const fmtTo   = data.to_date   != null ? msToEastern(data.to_date)   : null;
-  const fmtAt   = data.evaluated_at != null ? msToEastern(data.evaluated_at) : '';
+  const fmtFrom = data.from_date != null ? msToLocal(data.from_date) : null;
+  const fmtTo   = data.to_date   != null ? msToLocal(data.to_date)   : null;
+  const fmtAt   = data.evaluated_at != null ? msToLocal(data.evaluated_at) : '';
   const periodLabel = fmtFrom && fmtTo
     ? `${fmtFrom} → ${fmtTo}`
     : fmtFrom ? `from ${fmtFrom}`
@@ -956,7 +959,7 @@ async function viewRuleDetail(ruleId) {
 
   const auditHtml = audit.length ? `<ul class="audit-log">` + audit.map(a => `
     <li class="audit-entry">
-      <span class="ts">${a.created_at != null ? msToEastern(a.created_at) : '—'}</span>
+      <span class="ts">${a.created_at != null ? msToLocal(a.created_at) : '—'}</span>
       <span><strong>${a.author_name}</strong> <span class="audit-arrow">→</span>
         <span class="badge badge-${a.to_status}">${a.to_status.replace('_',' ')}</span>
         ${a.note ? `<span style="color:var(--muted)"> — ${a.note}</span>` : ''}
@@ -974,11 +977,11 @@ async function viewRuleDetail(ruleId) {
       <div class="detail-section" style="display:flex;gap:32px">
         <div>
           <label>Activated</label>
-          <div style="font-size:13px">${rule.activated_at != null ? msToEastern(rule.activated_at) : '—'}</div>
+          <div style="font-size:13px">${rule.activated_at != null ? msToLocal(rule.activated_at) : '—'}</div>
         </div>
         <div>
           <label>Deactivated</label>
-          <div style="font-size:13px">${rule.deactivated_at != null ? msToEastern(rule.deactivated_at) : '—'}</div>
+          <div style="font-size:13px">${rule.deactivated_at != null ? msToLocal(rule.deactivated_at) : '—'}</div>
         </div>
       </div>
       <div class="detail-section">
