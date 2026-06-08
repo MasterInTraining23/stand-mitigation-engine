@@ -133,6 +133,14 @@
     .sim-resolved.fail { background: var(--red-bg); color: var(--red); }
     .house-visual { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 
+    /* Resolved vulnerability card */
+    .vuln-card.resolved { border-color: #bbf7d0; }
+    .vuln-card.resolved .vuln-header { background: var(--green-bg); }
+    .vuln-resolved-banner { display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--green-bg); border-top: 1px solid #bbf7d0; font-size: 13px; font-weight: 600; color: var(--green); }
+    /* Bridge mitigation checkboxes superseded by a full mitigation */
+    .mit-checkbox-item.superseded { opacity: 0.4; pointer-events: none; }
+    .superseded-note { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 6px; }
+
     /* Applied Science */
     .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .toolbar h2 { font-size: 15px; font-weight: 600; }
@@ -478,6 +486,7 @@ let baseObservations = {};
 let appliedMitigations = new Set();
 let appliedFullMitigations = new Set();
 let lastEvaluationData = null;
+let lastBaselineData = null;   // first (no-mitigation) evaluation — master vuln list
 let lastAsOf = null;
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
@@ -529,6 +538,7 @@ async function runEvaluation() {
   appliedMitigations = new Set();
   appliedFullMitigations = new Set();
   lastEvaluationData = null;
+  lastBaselineData = null;
   await evaluateWithMitigations();
 }
 
@@ -550,6 +560,7 @@ async function evaluateWithMitigations() {
       body: JSON.stringify(body),
     });
     const data = await res.json();
+    if (!lastBaselineData) lastBaselineData = data;
     renderResults(data);
   } catch (e) {
     document.getElementById('results').innerHTML = `<div class="error-msg">Request failed: ${e.message}</div>`;
@@ -746,10 +757,17 @@ function renderResults(data) {
 }
 
 function renderResultsView(data) {
-  const { vulnerabilities, summary } = data;
+  // Always render the original set of vulnerabilities so cards never disappear.
+  // lastBaselineData holds the no-mitigation evaluation; data holds the current
+  // (bridge-mitigated) response which may contain fewer vulnerabilities.
+  const baseVulns = (lastBaselineData || data).vulnerabilities;
+  const baseSummary = (lastBaselineData || data).summary;
 
-  // Derive violation slugs for the house visual
-  const violations = new Set(vulnerabilities.map(v => v.rule_slug));
+  // Map of slug → current vulnerability data (may be absent when bridge-resolved)
+  const currentMap = new Map((data.vulnerabilities || []).map(v => [v.rule_slug, v]));
+
+  // Baseline violation slugs drive the house visual; mitigation state colors it
+  const violations = new Set(baseVulns.map(v => v.rule_slug));
 
   const fmtFrom = data.from_date != null ? msToLocal(data.from_date) : null;
   const fmtTo   = data.to_date   != null ? msToLocal(data.to_date)   : null;
@@ -760,12 +778,18 @@ function renderResultsView(data) {
     : fmtTo   ? `to ${fmtTo}`
     : `current rules (${fmtAt})`;
 
-  // House visual always shown after evaluation
   let html = `<div class="house-visual">${buildHouseVisual(baseObservations, violations, appliedMitigations, appliedFullMitigations)}</div>`;
 
-  if (vulnerabilities.length === 0) {
+  if (baseVulns.length === 0) {
     html += `<div class="summary-pass">✓ Property passes all active rules<br><small style="font-weight:400; opacity:0.75;">Evaluated: ${periodLabel}</small></div>`;
   } else {
+    // Count resolved cards for the summary bar
+    const resolvedCount = baseVulns.filter(v => {
+      const resolvedByFull   = v.full_mitigations.some(m => appliedFullMitigations.has(m.name));
+      const resolvedByBridge = !currentMap.has(v.rule_slug) && appliedMitigations.size > 0;
+      return resolvedByFull || resolvedByBridge;
+    }).length;
+
     const rangeLabel = fmtFrom && fmtTo
       ? `<span>Period: <strong>${fmtFrom}</strong> → <strong>${fmtTo}</strong></span>`
       : fmtFrom
@@ -777,25 +801,37 @@ function renderResultsView(data) {
     html += `
       <div class="summary-bar">
         ${rangeLabel}
-        <span>Vulnerabilities: <strong>${summary.total_vulnerabilities}</strong></span>
-        <span>Categories: <strong>${summary.categories_affected.join(', ')}</strong></span>
-        ${summary.unmitigatable_count ? `<span style="color:var(--red)">Unmitigatable: <strong>${summary.unmitigatable_count}</strong></span>` : ''}
-        ${summary.bridge_mitigation_count ? `<span style="color:var(--yellow)">Bridge-only: <strong>${summary.bridge_mitigation_count}</strong></span>` : ''}
+        <span>Vulnerabilities: <strong>${baseSummary.total_vulnerabilities}</strong></span>
+        ${resolvedCount > 0 ? `<span style="color:var(--green)">Resolved: <strong>${resolvedCount}</strong></span>` : ''}
+        <span>Categories: <strong>${baseSummary.categories_affected.join(', ')}</strong></span>
+        ${baseSummary.unmitigatable_count ? `<span style="color:var(--red)">Unmitigatable: <strong>${baseSummary.unmitigatable_count}</strong></span>` : ''}
+        ${baseSummary.bridge_mitigation_count ? `<span style="color:var(--yellow)">Bridge-only: <strong>${baseSummary.bridge_mitigation_count}</strong></span>` : ''}
       </div>
     `;
-    vulnerabilities.forEach(v => {
-      const hasFullMit = v.full_mitigations.length > 0;
-      const hasBridge  = v.bridge_mitigations.length > 0;
+
+    baseVulns.forEach(v => {
+      // A full mitigation resolves this vulnerability client-side
+      const resolvedByFull   = v.full_mitigations.some(m => appliedFullMitigations.has(m.name));
+      // A bridge mitigation resolved it server-side (card absent from live response)
+      const resolvedByBridge = !currentMap.has(v.rule_slug) && appliedMitigations.size > 0;
+      const isResolved = resolvedByFull || resolvedByBridge;
+
+      // Use live server data for violation_details when available; fall back to baseline
+      const liveV = currentMap.get(v.rule_slug) || v;
+
+      const hasFullMit   = v.full_mitigations.length > 0;
+      const hasBridge    = v.bridge_mitigations.length > 0;
       const hasSimulator = v.violation_details && v.violation_details.length > 0 && hasBridge;
 
       html += `
-        <div class="vuln-card">
+        <div class="vuln-card${isResolved ? ' resolved' : ''}">
           <div class="vuln-header">
             <div>
               <div class="vuln-title">${v.rule_name}</div>
               <div class="vuln-category">${v.category}</div>
             </div>
           </div>
+          ${isResolved ? `<div class="vuln-resolved-banner">✓ Vulnerability satisfied by applied mitigations</div>` : ''}
           <div class="vuln-body">
             <div class="written-rule">${v.written_rule}</div>
             ${hasFullMit ? `
@@ -813,7 +849,7 @@ function renderResultsView(data) {
                   }).join('')}
                 </div>
               </div>` : ''}
-            ${hasSimulator ? renderSimulator(v) : hasBridge ? `
+            ${hasSimulator ? renderSimulator(liveV, resolvedByFull) : hasBridge ? `
               <div class="mit-section bridge">
                 <h4>Bridge Mitigations (partial)</h4>
                 <ul class="mit-list">
@@ -833,7 +869,7 @@ function renderResultsView(data) {
   document.getElementById('results').innerHTML = html;
 }
 
-function renderSimulator(v) {
+function renderSimulator(v, resolvedByFull) {
   const allPass = v.violation_details.every(d => d.passes);
   const rows = v.violation_details.map(d => `
     <tr class="${d.passes ? 'sim-pass' : 'sim-fail'}">
@@ -849,9 +885,11 @@ function renderSimulator(v) {
     .map(m => {
       const slug = m.modifier_params.slug;
       const isApplied = appliedMitigations.has(slug);
+      // Grey out bridge options when a full mitigation already resolves the vulnerability
+      const superseded = resolvedByFull;
       return `
-        <div class="mit-checkbox-item${isApplied ? ' applied' : ''}">
-          <input type="checkbox" id="mit-${slug}" ${isApplied ? 'checked' : ''} onchange="toggleMitigation('${slug}')" />
+        <div class="mit-checkbox-item${isApplied ? ' applied' : ''}${superseded ? ' superseded' : ''}">
+          <input type="checkbox" id="mit-${slug}" ${isApplied ? 'checked' : ''} ${superseded ? 'disabled' : ''} onchange="toggleMitigation('${slug}')" />
           <label for="mit-${slug}">
             <strong>${m.name}</strong>
             <span>${m.description || ''}</span>
@@ -859,6 +897,10 @@ function renderSimulator(v) {
         </div>
       `;
     }).join('');
+
+  const supersededNote = resolvedByFull
+    ? `<div class="superseded-note">Bridge mitigations not applicable — full mitigation already resolves this vulnerability.</div>`
+    : '';
 
   const resolution = allPass
     ? `<div class="sim-resolved pass">✓ Vulnerability resolved with selected mitigations</div>`
@@ -874,6 +916,7 @@ function renderSimulator(v) {
         <tbody>${rows}</tbody>
       </table>
       <div class="mit-checkbox-list">${checkboxes}</div>
+      ${supersededNote}
       ${resolution}
     </div>
   `;
