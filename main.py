@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from db.database import engine
 from db.models import Base
 from db.seed import seed_rules
-from api.routers import evaluate, rules, admin
+from api.routers import evaluate, rules, admin, ai
 
 
 @asynccontextmanager
@@ -24,6 +24,7 @@ app = FastAPI(title="Stand Mitigation Rules Engine", version="0.1.0", lifespan=l
 app.include_router(evaluate.router, tags=["Evaluation"])
 app.include_router(rules.router, tags=["Rules"])
 app.include_router(admin.router, tags=["Admin"])
+app.include_router(ai.router, tags=["AI"])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

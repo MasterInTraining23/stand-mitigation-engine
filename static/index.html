@@ -176,6 +176,35 @@
     .empty { text-align: center; color: var(--muted); padding: 32px; font-size: 13px; }
     .loading { text-align: center; color: var(--muted); padding: 16px; font-size: 13px; }
     .error-msg { background: var(--red-bg); color: var(--red); border: 1px solid #fca5a5; border-radius: 6px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+
+    /* Experimental AI toggle */
+    .exp-toggle-wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 14px 0; }
+    .exp-label { font-size: 12px; color: var(--muted); font-weight: 500; user-select: none; }
+    .exp-badge { font-size: 10px; font-weight: 700; background: #f59e0b; color: white; padding: 1px 5px; border-radius: 999px; margin-left: 3px; }
+    .exp-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .exp-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .exp-slider { position: absolute; cursor: pointer; inset: 0; background: #d1d5db; border-radius: 999px; transition: background 0.2s; }
+    .exp-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .exp-switch input:checked + .exp-slider { background: #f59e0b; }
+    .exp-switch input:checked + .exp-slider::before { transform: translateX(16px); }
+    .exp-toggle-wrap.unavailable { opacity: 0.35; cursor: not-allowed; }
+    .exp-toggle-wrap.unavailable .exp-slider { cursor: not-allowed; }
+
+    /* NL panel */
+    .nl-panel { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .nl-panel-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .nl-panel-header span { font-size: 13px; font-weight: 600; color: #92400e; }
+    .nl-ai-badge { font-size: 10px; font-weight: 700; background: #f59e0b; color: white; padding: 1px 6px; border-radius: 999px; }
+    .nl-panel textarea { font-family: inherit; font-size: 13px; min-height: 72px; border-color: #fcd34d; background: white; resize: vertical; }
+    .nl-panel textarea:focus { border-color: #f59e0b; outline: none; }
+    .nl-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+    .btn-nl { background: #f59e0b; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+    .btn-nl:hover { background: #d97706; }
+    .btn-nl:disabled { background: #d1d5db; cursor: not-allowed; }
+    .nl-processing { font-size: 12px; color: var(--muted); }
+    .nl-unsupported { margin-top: 8px; background: var(--red-bg); border: 1px solid #fca5a5; border-radius: 6px; padding: 8px 12px; font-size: 12px; color: var(--red); }
+    .nl-unsupported strong { display: block; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .nl-unsupported ul { list-style: disc; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
   </style>
 </head>
 <body>
@@ -186,12 +215,34 @@
     <button class="active" onclick="switchTab('underwriter', this)">Underwriter</button>
     <button onclick="switchTab('applied-science', this)">Applied Science</button>
   </nav>
+  <div id="exp-toggle-wrap" class="exp-toggle-wrap" style="display:none" title="AI Assist requires the claude CLI to be installed">
+    <span class="exp-label">AI Assist<span class="exp-badge">EXPERIMENTAL</span></span>
+    <label class="exp-switch">
+      <input type="checkbox" id="exp-toggle" onchange="toggleExperimental(this.checked)" />
+      <span class="exp-slider"></span>
+    </label>
+  </div>
 </header>
 
 <main>
 
   <!-- ─── UNDERWRITER TAB ─── -->
   <div id="tab-underwriter" class="tab active">
+
+    <!-- NL input panel (shown only when experimental AI is enabled) -->
+    <div id="nl-underwriter" class="nl-panel" style="display:none">
+      <div class="nl-panel-header">
+        <span>Natural Language Input</span>
+        <span class="nl-ai-badge">AI</span>
+      </div>
+      <textarea id="nl-uw-text" placeholder="Describe the property in plain English — e.g. 'The roof is Class B shingles, windows are single pane, there's a large oak tree about 25 feet from the nearest window, and the neighbor's house is 18 feet away in wildfire zone B.'"></textarea>
+      <div class="nl-actions">
+        <button class="btn-nl" onclick="nlExtractObservations()">Extract Observations</button>
+        <span id="nl-uw-status" class="nl-processing" style="display:none">Thinking…</span>
+      </div>
+      <div id="nl-uw-unsupported" class="nl-unsupported" style="display:none"></div>
+    </div>
+
     <div class="card">
       <h2>Property Observations</h2>
       <div class="form-grid">
@@ -282,6 +333,21 @@
   <div class="modal">
     <h2 id="modal-title">New Rule</h2>
     <input type="hidden" id="modal-rule-id" />
+
+    <!-- NL input panel (shown only when experimental AI is enabled) -->
+    <div id="nl-rule-panel" class="nl-panel" style="display:none">
+      <div class="nl-panel-header">
+        <span>Natural Language Rule Input</span>
+        <span class="nl-ai-badge">AI</span>
+      </div>
+      <textarea id="nl-rule-text" placeholder="Describe the rule in plain English — e.g. 'Properties in wildfire zones B or higher must have tempered glass windows, or at least 40 feet of clearance between any shrubs and the nearest window.'"></textarea>
+      <div class="nl-actions">
+        <button class="btn-nl" onclick="nlExtractRule()">Extract Rule</button>
+        <span id="nl-rule-status" class="nl-processing" style="display:none">Thinking…</span>
+      </div>
+      <div id="nl-rule-unsupported" class="nl-unsupported" style="display:none"></div>
+    </div>
+
     <div class="form-grid">
       <div class="form-group">
         <label>Slug (unique identifier, snake_case)</label>
@@ -1010,6 +1076,9 @@ function openCreateModal() {
   });
   document.getElementById('m-type').value = 'boolean_condition';
   document.getElementById('m-slug').disabled = false;
+  document.getElementById('nl-rule-panel').style.display = experimentalEnabled ? 'block' : 'none';
+  document.getElementById('nl-rule-text').value = '';
+  document.getElementById('nl-rule-unsupported').style.display = 'none';
   document.getElementById('rule-modal').classList.add('open');
 }
 
@@ -1124,6 +1193,120 @@ async function loadRandomRule() {
   document.getElementById('m-author-name').value = '';
 }
 
+// ─── AI ASSIST ───────────────────────────────────────────────────────────────
+let experimentalEnabled = false;
+
+async function initAI() {
+  try {
+    const res = await fetch('/ai/available');
+    const { available } = await res.json();
+    const wrap = document.getElementById('exp-toggle-wrap');
+    wrap.style.display = 'flex';
+    if (!available) {
+      wrap.classList.add('unavailable');
+      wrap.title = 'AI Assist requires the claude CLI — not found on this system';
+      document.getElementById('exp-toggle').disabled = true;
+    }
+  } catch (_) {}
+}
+
+function toggleExperimental(on) {
+  experimentalEnabled = on;
+  document.getElementById('nl-underwriter').style.display = on ? 'block' : 'none';
+  // Rule modal panel respects the toggle the next time it opens (see openCreateModal)
+}
+
+function _setSelectValue(id, value) {
+  const el = document.getElementById(id);
+  for (const opt of el.options) {
+    if (opt.value === value) { el.value = value; return; }
+  }
+}
+
+function _renderNlUnsupported(items, containerId) {
+  const el = document.getElementById(containerId);
+  if (!items || items.length === 0) { el.style.display = 'none'; return; }
+  el.innerHTML = `<strong>Not supported / could not extract:</strong><ul>${items.map(u => `<li>${u}</li>`).join('')}</ul>`;
+  el.style.display = 'block';
+}
+
+async function nlExtractObservations() {
+  const text = document.getElementById('nl-uw-text').value.trim();
+  if (!text) return;
+  const btn = document.querySelector('#nl-underwriter .btn-nl');
+  const status = document.getElementById('nl-uw-status');
+  btn.disabled = true;
+  status.style.display = 'inline';
+  document.getElementById('nl-uw-unsupported').style.display = 'none';
+
+  try {
+    const res = await fetch('/ai/extract-observations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const obs = data.observations || {};
+    if (obs.attic_vent_screens) _setSelectValue('attic_vent_screens', obs.attic_vent_screens);
+    if (obs.roof_type)           _setSelectValue('roof_type', obs.roof_type);
+    if (obs.window_type)         _setSelectValue('window_type', obs.window_type);
+    if (obs.wildfire_risk_category) _setSelectValue('wildfire_risk_category', obs.wildfire_risk_category);
+    if (obs.home_to_home_distance != null) document.getElementById('home_to_home_distance').value = obs.home_to_home_distance;
+    if (Array.isArray(obs.vegetation) && obs.vegetation.length > 0) {
+      vegetationItems = obs.vegetation.map(v => ({ type: v.type, distance: v.distance_to_window }));
+      renderVegetation();
+    }
+    checkObservations();
+    _renderNlUnsupported(data.unsupported, 'nl-uw-unsupported');
+  } catch (e) {
+    const el = document.getElementById('nl-uw-unsupported');
+    el.innerHTML = `<strong>Error:</strong> ${e.message}`;
+    el.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    status.style.display = 'none';
+  }
+}
+
+async function nlExtractRule() {
+  const text = document.getElementById('nl-rule-text').value.trim();
+  if (!text) return;
+  const btn = document.querySelector('#nl-rule-panel .btn-nl');
+  const status = document.getElementById('nl-rule-status');
+  btn.disabled = true;
+  status.style.display = 'inline';
+  document.getElementById('nl-rule-unsupported').style.display = 'none';
+
+  try {
+    const res = await fetch('/ai/extract-rule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const rule = data.rule || {};
+    if (rule.slug)         { document.getElementById('m-slug').value = rule.slug; document.getElementById('m-slug').disabled = false; }
+    if (rule.category)     document.getElementById('m-category').value = rule.category;
+    if (rule.name)         document.getElementById('m-name').value = rule.name;
+    if (rule.written_rule) document.getElementById('m-written-rule').value = rule.written_rule;
+    if (rule.type)         document.getElementById('m-type').value = rule.type;
+    if (rule.definition)   document.getElementById('m-definition').value = JSON.stringify(rule.definition, null, 2);
+
+    _renderNlUnsupported(data.unsupported, 'nl-rule-unsupported');
+  } catch (e) {
+    const el = document.getElementById('nl-rule-unsupported');
+    el.innerHTML = `<strong>Error:</strong> ${e.message}`;
+    el.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    status.style.display = 'none';
+  }
+}
+
 async function runTest() {
   if (!testingRuleId) return;
   let observations;
@@ -1148,6 +1331,7 @@ async function runTest() {
     document.getElementById('test-result').innerHTML = `<div class="test-result test-fail">Request failed: ${e.message}</div>`;
   }
 }
+initAI();
 </script>
 </body>
 </html>
