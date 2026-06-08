@@ -1,5 +1,6 @@
 import threading
 from typing import Optional
+from sqlalchemy.orm import selectinload
 
 
 class RuleCache:
@@ -31,7 +32,20 @@ class RuleCache:
         if to_date is not None:
             return query_active_rules_at(db, to_date)
         if self._cache is None:
-            self._cache = query_active_rules(db)
+            from db.models import Rule
+            rules = (
+                db.query(Rule)
+                .options(selectinload(Rule.mitigations))
+                .filter(Rule.status == "activated")
+                .all()
+            )
+            # Expunge from session so cached objects survive across requests
+            # without triggering lazy-load on a closed session.
+            for rule in rules:
+                for m in rule.mitigations:
+                    db.expunge(m)
+                db.expunge(rule)
+            self._cache = rules
         return self._cache
 
     def invalidate(self):
