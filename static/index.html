@@ -444,38 +444,40 @@
 <script>
 // ─── TIMEZONE HELPERS (local timezone) ───────────────────────────────────────
 function msToLocal(ms) {
-  // Accept epoch-ms integers (new format) or legacy datetime strings (old DB).
+  // Accept epoch-ms integers or legacy datetime strings.
   const d = typeof ms === 'number' ? new Date(ms) : new Date(String(ms).replace(' ', 'T'));
   if (isNaN(d.getTime())) return String(ms);
-  // Safari throws "The string did not match the expected pattern" on toLocaleString
-  // when hour12:false is combined with hour:'2-digit' — wrap and fall back to UTC ISO.
+  // Avoid toLocaleString entirely — Safari throws "The string did not match the
+  // expected pattern" for hour12:false and sv-SE locale. Instead shift the UTC
+  // timestamp by the local offset and read UTC components.
   try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const tzAbbr = d.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
-    return d.toLocaleString('en-US', {
-      timeZone: tz,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false,
-    }).replace(',', '') + ' ' + tzAbbr;
+    const offsetMs = -d.getTimezoneOffset() * 60000;
+    const local = new Date(d.getTime() + offsetMs);
+    const Y  = local.getUTCFullYear();
+    const Mo = String(local.getUTCMonth() + 1).padStart(2, '0');
+    const D  = String(local.getUTCDate()).padStart(2, '0');
+    const h  = String(local.getUTCHours()).padStart(2, '0');
+    const mi = String(local.getUTCMinutes()).padStart(2, '0');
+    const s  = String(local.getUTCSeconds()).padStart(2, '0');
+    // Timezone abbreviation: toLocaleTimeString with timeZoneName:'short' is safe
+    // (it doesn't use hour12:false or sv-SE), but wrap defensively anyway.
+    let tzAbbr = '';
+    try { tzAbbr = ' ' + d.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop(); } catch (_) {}
+    return `${Mo}/${D}/${Y} ${h}:${mi}:${s}${tzAbbr}`;
   } catch (_) {
     return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   }
 }
 
 // Convert a datetime-local string (treated as local time) to epoch milliseconds.
-// datetime-local values can be "YYYY-MM-DDTHH:MM", "YYYY-MM-DDTHH:MM:SS", or
-// "YYYY-MM-DDTHH:MM:SS.SSS" — normalize to the first 16 chars before appending
-// ":00Z" so the constructed UTC string is always valid ISO 8601.
+// Uses getTimezoneOffset() — no locale API calls, no Safari issues.
 function localInputToMs(dtStr) {
   if (!dtStr) return null;
-  const base = dtStr.slice(0, 16); // "YYYY-MM-DDTHH:MM" — strips seconds if present
-  const approxUtc = new Date(base + ':00Z');
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const localStr = approxUtc.toLocaleString('sv-SE', { timeZone: tz });
-  const localAsUtc = new Date(localStr.replace(' ', 'T') + 'Z');
-  const offset = approxUtc.getTime() - localAsUtc.getTime();
-  return new Date(base + ':00Z').getTime() + offset;
+  const base = dtStr.slice(0, 16); // "YYYY-MM-DDTHH:MM"
+  const asIfUtc = new Date(base + ':00Z');
+  // getTimezoneOffset() returns minutes-behind-UTC (positive = west, negative = east).
+  // Adding it converts "treat as local" → actual UTC epoch-ms.
+  return asIfUtc.getTime() + asIfUtc.getTimezoneOffset() * 60000;
 }
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
@@ -543,27 +545,32 @@ async function runEvaluation() {
 }
 
 async function evaluateWithMitigations() {
-  const obs = { ...baseObservations };
-  if (appliedMitigations.size > 0) obs.applied_mitigations = [...appliedMitigations];
-
-  const fromVal = document.getElementById('from_date').value;
-  const toVal   = document.getElementById('to_date').value;
-
-  const body = { observations: obs };
-  if (fromVal) body.from_date = localInputToMs(fromVal);
-  if (toVal)   body.to_date   = localInputToMs(toVal);
-
   try {
+    const obs = { ...baseObservations };
+    if (appliedMitigations.size > 0) obs.applied_mitigations = [...appliedMitigations];
+
+    const fromVal = document.getElementById('from_date').value;
+    const toVal   = document.getElementById('to_date').value;
+
+    const body = { observations: obs };
+    if (fromVal) body.from_date = localInputToMs(fromVal);
+    if (toVal)   body.to_date   = localInputToMs(toVal);
+
     const res = await fetch('/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      let detail = `Server error (${res.status})`;
+      try { const err = await res.json(); detail = err.detail || detail; } catch (_) {}
+      throw new Error(detail);
+    }
     const data = await res.json();
     if (!lastBaselineData) lastBaselineData = data;
     renderResults(data);
   } catch (e) {
-    document.getElementById('results').innerHTML = `<div class="error-msg">Request failed: ${e.message}</div>`;
+    document.getElementById('results').innerHTML = `<div class="error-msg">Evaluation failed: ${e.message}</div>`;
   }
 }
 
