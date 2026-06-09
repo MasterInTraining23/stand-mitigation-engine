@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stand Mitigation Engine</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --border:    #30363d;
+    --accent:    #e05a2b;
+    --accent2:   #f0a05a;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --green:     #3fb950;
+    --blue:      #58a6ff;
+    --yellow:    #d29922;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── slides ── */
+  .deck {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 80px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(60px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+  .slide.exit-left {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+
+  /* ── nav bar ── */
+  .nav {
+    height: 56px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+
+  .nav button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 22px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .nav button:hover { background: var(--border); }
+  .nav button:disabled { opacity: 0.25; cursor: default; }
+
+  .nav .pager {
+    font-size: 13px;
+    color: var(--muted);
+    min-width: 64px;
+    text-align: center;
+  }
+
+  /* ── shared typography ── */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+
+  h1 { font-size: 52px; font-weight: 700; line-height: 1.1; }
+  h2 { font-size: 32px; font-weight: 700; margin-bottom: 32px; }
+  h3 { font-size: 18px; font-weight: 600; margin-bottom: 10px; }
+
+  /* ── slide 1: title ── */
+  #s1 {
+    background: radial-gradient(ellipse at 30% 40%, #1a0a04 0%, var(--bg) 65%);
+    text-align: center;
+  }
+  #s1 h1 { font-size: 56px; margin-bottom: 18px; }
+  #s1 .flame { color: var(--accent); }
+  #s1 .subtitle {
+    font-size: 20px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  #s1 .divider {
+    width: 64px;
+    height: 2px;
+    background: var(--accent);
+    margin: 20px auto;
+    border-radius: 2px;
+  }
+  #s1 .tag-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 28px;
+  }
+  #s1 .tag {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  /* ── slide 2: pain points ── */
+  #s2 h2 { margin-bottom: 36px; }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .pain-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+  }
+  .pain-card .role-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+  .role-uw  { background: rgba(88,166,255,0.12); color: var(--blue);   border: 1px solid rgba(88,166,255,0.3); }
+  .role-sci { background: rgba(63,185,80,0.12);  color: var(--green);  border: 1px solid rgba(63,185,80,0.3); }
+
+  .pain-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+  .pain-list li {
+    display: flex;
+    gap: 12px;
+    font-size: 15px;
+    line-height: 1.45;
+    color: #c9d1d9;
+  }
+  .pain-list li::before {
+    content: "✕";
+    color: var(--accent);
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* ── slide 3: demo ── */
+  #s3 { text-align: center; }
+  .demo-frame {
+    margin-top: 24px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    width: 100%;
+    max-width: 860px;
+    background: var(--surface);
+  }
+  .demo-chrome {
+    background: #21262d;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; }
+  .dot.y { background: #febc2e; }
+  .dot.g { background: #28c840; }
+  .url-bar {
+    flex: 1;
+    background: var(--bg);
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: monospace;
+  }
+  .demo-body {
+    padding: 40px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  .demo-body .headline {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .demo-features {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .demo-feat {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .demo-feat .icon { font-size: 16px; }
+  .demo-note {
+    font-size: 15px;
+    color: var(--muted);
+    max-width: 520px;
+  }
+
+  /* ── slide 4: decisions ── */
+  #s4 { justify-content: flex-start; padding-top: 52px; }
+
+  .decisions-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 20px;
+    width: 100%;
+    max-width: 1040px;
+    margin: 4px auto 0;
+  }
+
+  .dec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px;
+  }
+  .dec-card .dec-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* rule shape choices */
+  .choice-list { display: flex; flex-direction: column; gap: 10px; }
+  .choice {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 13.5px;
+    line-height: 1.4;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    color: var(--muted);
+  }
+  .choice.selected {
+    background: rgba(224,90,43,0.1);
+    border-color: rgba(224,90,43,0.4);
+    color: var(--text);
+  }
+  .choice .badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .badge-no  { background: rgba(255,80,80,0.15); color: #ff6b6b; border: 1px solid rgba(255,80,80,0.3); }
+  .badge-yes { background: rgba(224,90,43,0.2);  color: var(--accent2); border: 1px solid rgba(224,90,43,0.4); }
+
+  /* tradeoff rows */
+  .tradeoff-list { display: flex; flex-direction: column; gap: 12px; }
+  .tradeoff {
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: #c9d1d9;
+  }
+  .tradeoff strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 3px;
+  }
+  .tradeoff.db   strong { color: var(--blue); }
+  .tradeoff.ext  strong { color: var(--green); }
+  .tradeoff.vers strong { color: var(--yellow); }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- ── Slide 1: Title ── -->
+  <section class="slide active" id="s1">
+    <p class="eyebrow">Wildfire Risk Underwriting</p>
+    <h1><span class="flame">Stand</span> Mitigation<br>Rules Engine</h1>
+    <div class="divider"></div>
+    <p class="subtitle">Amadu Durham</p>
+    <div class="tag-row">
+      <span class="tag">FastAPI</span>
+      <span class="tag">SQLite</span>
+      <span class="tag">Vanilla JS</span>
+      <span class="tag">Claude AI</span>
+    </div>
+  </section>
+
+  <!-- ── Slide 2: Pain Points ── -->
+  <section class="slide" id="s2">
+    <h2>User Pain Points</h2>
+    <div class="two-col">
+
+      <div class="pain-card">
+        <div class="role-label role-uw">&#9679; Underwriter</div>
+        <ul class="pain-list">
+          <li>No visibility into <em>which</em> observations trigger a policy failure — evaluation is a black box</li>
+          <li>Can't model "what if I apply this mitigation?" before recommending costly remediation to a client</li>
+          <li>No distinction between a partial fix (bridge) and a permanent resolution (full) — both look the same</li>
+          <li>No spatial representation of the property — risk is abstract, not visual</li>
+        </ul>
+      </div>
+
+      <div class="pain-card">
+        <div class="role-label role-sci">&#9679; Applied Scientist</div>
+        <ul class="pain-list">
+          <li>Rule changes require an engineer — no self-service lifecycle (draft → review → activate)</li>
+          <li>No safe way to test a new rule against real observations before pushing it live</li>
+          <li>No audit trail for who changed a rule, when, or why</li>
+          <li>Historical queries impossible — can't reconstruct which rule version was active for a past policy period</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Slide 3: Demo ── -->
+  <section class="slide" id="s3">
+    <p class="eyebrow">Live Walkthrough</p>
+    <h2>Demo</h2>
+    <div class="demo-frame">
+      <div class="demo-chrome">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <div class="url-bar">http://localhost:8000</div>
+      </div>
+      <div class="demo-body">
+        <p class="headline">Stand Mitigation Rules Engine</p>
+        <div class="demo-features">
+          <div class="demo-feat"><span class="icon">🏠</span> Observation form + SVG house visual</div>
+          <div class="demo-feat"><span class="icon">⚡</span> Real-time vulnerability evaluation</div>
+          <div class="demo-feat"><span class="icon">🔧</span> Bridge &amp; full mitigation simulator</div>
+          <div class="demo-feat"><span class="icon">🔬</span> Applied Scientist rule management</div>
+          <div class="demo-feat"><span class="icon">🤖</span> AI Assist (NL → observations / rules)</div>
+          <div class="demo-feat"><span class="icon">📋</span> Rule lifecycle + audit trail</div>
+        </div>
+        <p class="demo-note">Navigate to the Underwriter tab, enter property observations, hit Evaluate, then toggle mitigations to simulate remediation scenarios.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Slide 4: Solution Decisions ── -->
+  <section class="slide" id="s4">
+    <h2>Key Solution Decisions</h2>
+    <div class="decisions-grid">
+
+      <!-- Rule Data-Type Shape -->
+      <div class="dec-card">
+        <div class="dec-title">Rule Data-Type Shape</div>
+        <div class="choice-list">
+          <div class="choice">
+            <span class="badge badge-no">✕</span>
+            <div><strong style="display:inline;font-size:13px;">Flat columns per condition</strong> — separate SQL columns for field, operator, value. Simple but incapable of nesting or multi-step logic.</div>
+          </div>
+          <div class="choice">
+            <span class="badge badge-no">✕</span>
+            <div><strong style="display:inline;font-size:13px;">Single unified JSON schema</strong> — one fixed JSON shape for all rule types. Forces every rule to carry fields it doesn't use; schema becomes a kitchen sink.</div>
+          </div>
+          <div class="choice selected">
+            <span class="badge badge-yes">✓</span>
+            <div><strong style="display:inline;font-size:13px;">Typed JSON blob + discriminator</strong> — a <code>type</code> string selects the evaluator class; <code>definition</code> JSON varies freely per type. Enables recursive condition trees (<code>boolean_condition</code>) and multi-item threshold logic (<code>threshold_condition</code>) without schema coupling.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Database Selection -->
+      <div class="dec-card">
+        <div class="dec-title">Database Selection</div>
+        <div class="tradeoff-list">
+          <div class="tradeoff db">
+            <strong>SQLite — Chosen</strong>
+            Zero-config, single-file, embedded. No server process. Fits the single-instance, local-first deployment model. Evaluation read-load is absorbed by the in-process rule cache, so DB is only hit on writes and historical queries.
+          </div>
+          <div class="tradeoff db">
+            <strong>PostgreSQL — Rejected</strong>
+            Justified at scale (concurrent writers, multi-instance deploy) but adds operational overhead (server, migrations tooling) that provides no benefit here. The tradeoff reverses if the engine moves to a multi-tenant SaaS model.
+          </div>
+        </div>
+      </div>
+
+      <!-- Extensibility -->
+      <div class="dec-card">
+        <div class="dec-title">Extensibility</div>
+        <div class="tradeoff-list">
+          <div class="tradeoff ext">
+            <strong>New Rule Types</strong>
+            Adding a condition type = one new evaluator class (subclass <code>BaseEvaluator</code>) + one entry in the <code>EVALUATORS</code> dispatch dict. Zero changes to the DB schema or existing evaluators.
+          </div>
+          <div class="tradeoff vers">
+            <strong>Rule Versioning</strong>
+            Rules are versioned by slug — multiple rows, one activated at a time. A new version activates atomically while the old one is deactivated in the same transaction. Historical queries reconstruct any past ruleset using epoch-ms timestamps.
+          </div>
+          <div class="tradeoff ext">
+            <strong>Mitigation Types</strong>
+            Full vs. bridge is a first-class distinction. Bridge mitigations carry <code>modifier_params</code> JSON consumed by the evaluator; full mitigations are purely declarative. New modifier strategies slot in without touching card rendering logic.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div><!-- /.deck -->
+
+<!-- ── Navigation ── -->
+<nav class="nav">
+  <button id="prev" disabled>&#8592; Prev</button>
+  <span class="pager" id="pager">1 / 4</span>
+  <button id="next">Next &#8594;</button>
+</nav>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let current = 0;
+
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  const pager   = document.getElementById('pager');
+
+  function go(to) {
+    if (to < 0 || to >= slides.length) return;
+
+    const from    = current;
+    const forward = to > from;
+
+    slides[from].classList.remove('active');
+    if (forward) slides[from].classList.add('exit-left');
+
+    current = to;
+    update();
+
+    setTimeout(() => {
+      slides[from].classList.remove('exit-left');
+      slides[current].style.transform = forward ? 'translateX(60px)' : 'translateX(-60px)';
+      slides[current].classList.add('active');
+      slides[current].getBoundingClientRect();
+      slides[current].style.transform = '';
+    }, forward ? 200 : 0);
+  }
+
+  function update() {
+    pager.textContent = `${current + 1} / ${slides.length}`;
+    prevBtn.disabled  = current === 0;
+    nextBtn.disabled  = current === slides.length - 1;
+  }
+
+  prevBtn.addEventListener('click', () => go(current - 1));
+  nextBtn.addEventListener('click', () => go(current + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(current + 1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   go(current - 1);
+  });
+</script>
+</body>
+</html>
